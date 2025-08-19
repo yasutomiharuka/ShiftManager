@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>ユーザー一覧</title>
+</head>
+<body>
+    <h2>ユーザー一覧</h2>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>ユーザーID</th>
+                <th>姓</th>
+                <th>名</th>
+                <th>雇用形態</th>
+                <th>所属</th>
+                <th>詳細</th>
+            </tr>
+        </thead>
+		<tbody>
+			<!-- 事前にメッセージキーを解決する -->
+		    <tr th:each="user : ${users}" th:with="
+		        employmentTypeKey='employment_type.' + ${user.employmentType},
+		        departmentKey='department.' + ${user.department},
+		        employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+		        departmentMsg=${#messages.msg(departmentKey)}
+		    ">
+		        <td th:text="${user.id}"></td>
+		        <td th:text="${user.firstName}"></td>
+		        <td th:text="${user.lastName}"></td>
+		        <td th:text="${employmentTypeMsg}"></td>
+		        <td th:text="${departmentMsg}"></td>
+		        <td>
+		            <a th:href="@{/user/detail/{id}(id=${user.id})}">詳細を見る</a>
+		        </td>
+		    </tr>
+		</tbody>
+
+    </table>
+    <a href="/home">ホームへ戻る</a>
+</body>
+</html>

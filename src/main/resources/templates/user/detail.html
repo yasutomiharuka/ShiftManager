@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>ユーザー詳細</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+
+    <h2>ユーザー詳細</h2>
+	
+	<!-- 事前にメッセージキーを解決する -->
+	<div th:with="
+	    roleKey='role.' + ${user.role},
+	    genderKey='gender.' + ${user.gender},
+	    employmentTypeKey='employment_type.' + ${user.employmentType},
+	    departmentKey='department.' + ${user.department},
+	    roleMsg=${#messages.msg(roleKey)},
+	    genderMsg=${#messages.msg(genderKey)},
+	    employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+	    departmentMsg=${#messages.msg(departmentKey)}
+	">
+	
+    <table>
+        <tr>
+            <th>ユーザーID</th>
+            <td th:text="${user.id}"></td>
+        </tr>
+        <tr>
+            <th>ユーザーロール</th>
+            <td th:text="${roleMsg}"></td>
+        </tr>
+        <tr>
+            <th>姓名</th>
+            <td th:text="${user.firstName + ' ' + user.lastName}"></td>
+        </tr>
+        <tr>
+            <th>生年月日</th>
+            <td th:text="${user.birthDate}"></td>
+        </tr>
+        <tr>
+            <th>性別</th>
+            <td th:text="${genderMsg}"></td>
+        </tr>
+        <tr>
+            <th>雇用形態</th>
+            <td th:text="${employmentTypeMsg}"></td>
+        </tr>
+		<!-- 固定勤務スケジュール（パートのみ） -->
+		 <div th:if="${user.employmentType} == 'parttime'">
+		     <h3>固定勤務スケジュール</h3>
+
+		     <p>月曜日：<span th:text="${user.mondayOff} ? '休み' : ${user.mondayStartTime} + '〜' + ${user.mondayEndTime}"></span></p>
+		     <p>火曜日：<span th:text="${user.tuesdayOff} ? '休み' : ${user.tuesdayStartTime} + '〜' + ${user.tuesdayEndTime}"></span></p>
+		     <p>水曜日：<span th:text="${user.wednesdayOff} ? '休み' : ${user.wednesdayStartTime} + '〜' + ${user.wednesdayEndTime}"></span></p>
+		     <p>木曜日：<span th:text="${user.thursdayOff} ? '休み' : ${user.thursdayStartTime} + '〜' + ${user.thursdayEndTime}"></span></p>
+		     <p>金曜日：<span th:text="${user.fridayOff} ? '休み' : ${user.fridayStartTime} + '〜' + ${user.fridayEndTime}"></span></p>
+		     <p>土曜日：<span th:text="${user.saturdayOff} ? '休み' : ${user.saturdayStartTime} + '〜' + ${user.saturdayEndTime}"></span></p>
+		     <p>日曜日：<span th:text="${user.sundayOff} ? '休み' : ${user.sundayStartTime} + '〜' + ${user.sundayEndTime}"></span></p>
+		 </div>            
+
+        <tr>
+            <th>所属</th>
+            <td th:text="${departmentMsg}"></td>
+        </tr>
+    </table>
+
+    <a th:href="@{/user/edit/{id}(id=${user.id})}">編集</a>
+    <a th:href="@{/user/delete/confirm/{id}(id=${user.id})}">削除</a>
+    <a th:href="@{/user/list}">戻る</a>
+
+</body>
+</html>

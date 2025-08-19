@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>ユーザー編集確認</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <h2>ユーザー情報の確認</h2>
+
+	<!-- 事前にメッセージキーを解決する -->
+	<div th:with="
+	    roleKey='role.' + ${user.role},
+	    genderKey='gender.' + ${user.gender},
+	    employmentTypeKey='employment_type.' + ${user.employmentType},
+	    departmentKey='department.' + ${user.department},
+	    roleMsg=${#messages.msg(roleKey)},
+	    genderMsg=${#messages.msg(genderKey)},
+	    employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+	    departmentMsg=${#messages.msg(departmentKey)}
+	">
+        <form th:action="@{/user/edit/complete}" method="post" th:object="${user}">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+            <p>ユーザー名: <span th:text="*{username}"></span></p>
+            <p>姓: <span th:text="*{firstName}"></span></p>
+            <p>名: <span th:text="*{lastName}"></span></p>
+            <p>ユーザーロール: <span th:text="${roleMsg}"></span></p>
+            <p>生年月日: <span th:text="*{birthDate}"></span></p>
+            <p>性別: <span th:text="${genderMsg}"></span></p>
+            <p>雇用形態: <span th:text="${employmentTypeMsg}"></span></p>
+			<!-- 固定勤務スケジュール（パートのみ表示） -->
+			<div th:if="*{employmentType} == 'parttime'">
+			    <p><strong>固定勤務スケジュール:</strong></p>
+			    <ul>
+			        <li th:each="day : ${#lists.arrayList('MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY')}"
+			            th:if="*{fixedWorkSchedule[day]} != null and !#strings.isEmpty(fixedWorkSchedule[day])">
+			            <span th:text="${day} + ': ' + ${user.fixedWorkSchedule[day]}"></span>
+			        </li>
+			    </ul>
+			</div>
+            <p>所属: <span th:text="${departmentMsg}"></span></p>
+
+            <input type="hidden" th:field="*{id}" />
+            <input type="hidden" th:field="*{username}" />
+            <input type="hidden" th:field="*{firstName}" />
+            <input type="hidden" th:field="*{lastName}" />
+            <input type="hidden" th:field="*{role}" />
+            <input type="hidden" th:field="*{birthDate}" />
+            <input type="hidden" th:field="*{gender}" />
+            <input type="hidden" th:field="*{employmentType}" />
+            <input type="hidden" th:field="*{department}" />
+			<!-- 勤務スケジュールも hidden で送信（パートのみ） -->
+			<div th:if="*{employmentType} == 'parttime'">
+			    <div th:each="day : ${#lists.arrayList('MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY')}">
+			        <input type="hidden" th:name="${'fixedWorkSchedule[' + day + ']'}"
+			               th:value="*{fixedWorkSchedule[day]}" />
+			    </div>
+			</div>
+
+
+            <button type="submit">完了</button>
+            <a th:href="@{/user/edit/{id}(id=${user.id})}">戻る</a>
+        </form>
+    </div>
+</body>
+</html>

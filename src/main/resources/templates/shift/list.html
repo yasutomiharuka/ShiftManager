@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>シフト一覧</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+        .日 { background-color: #e0f7fa; }  /* 水色 */
+        .夜 { background-color: #d1c4e9; }  /* 紫 */
+        .明 { background-color: #ffe0b2; }  /* オレンジ */
+        .休 { background-color: #b3e5fc; }  /* 青 */
+        .有 { background-color: #fff9c4; }  /* 黄色 */
+        .臨\(確\) { background-color: #c8e6c9; }  /* 緑 */
+        .臨\(自\) { background-color: #f0f4c3; }  /* 黄緑 */
+    </style>
+</head>
+<body>
+<h2 th:text="'シフト一覧（' + ${selectedDepartmentName} + '／' + ${month} + '）'"></h2>
+
+<form method="get" th:action="@{/shift/list}">
+    <label>部署:</label>
+    <select name="department">
+		<option th:each="deptCode : ${departments}"
+		        th:value="${deptCode}"
+		        th:text="${departmentNames[deptCode.toString()]}"
+		        th:selected="${deptCode == department}"></option>
+    </select>
+
+    <label>月:</label>
+    <input type="month" name="month" th:value="${month}" />
+
+    <button type="submit">表示</button>
+</form>
+
+<br/>
+
+<table>
+    <thead>
+        <tr>
+            <th>職員名</th>
+            <th th:each="d : ${dates}" th:text="${#temporals.format(d, 'M/d')}"></th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr th:each="user : ${users}">
+            <td th:text="${user.lastName + ' ' + user.firstName}"></td>
+            <td th:each="d : ${dates}"
+                th:with="key=${user.id + '_' + d}"
+                th:text="${shiftMap[key]}"
+                th:class="${shiftMap[key]}" />
+        </tr>
+    </tbody>
+</table>
+
+<br>
+<div>
+    <a th:href="@{/shift/generate(department=${department}, month=${month})}">シフト生成</a> |
+    <a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集</a> |
+    <a href="/">戻る</a>
+</div>
+
+</body>
+</html>

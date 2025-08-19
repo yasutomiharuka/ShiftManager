@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>登録完了</title>
+</head>
+<body>
+    <h1>登録完了</h1>
+    <p>以下の内容で登録が完了しました。</p>
+
+    <!-- 事前にメッセージキーを解決する -->
+    <div th:with="
+        roleKey='role.' + ${userProfileDto.role},
+        genderKey='gender.' + ${userProfileDto.gender},
+        employmentTypeKey='employment_type.' + ${userProfileDto.employmentType},
+        departmentKey='department.' + ${userProfileDto.department},
+        roleMsg=${#messages.msg(roleKey)},
+        genderMsg=${#messages.msg(genderKey)},
+        employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+        departmentMsg=${#messages.msg(departmentKey)}
+    ">
+        <form th:object="${userProfileDto}">
+            <ul>
+                <li>ユーザー名: <span th:text="*{username}"></span></li>
+                <li>姓: <span th:text="*{firstName}"></span></li>
+                <li>名: <span th:text="*{lastName}"></span></li>
+                <li>ユーザーロール: <span th:text="${roleMsg}"></span></li>
+                <li>生年月日: <span th:text="*{birthDate}"></span></li>
+                <li>性別: <span th:text="${genderMsg}"></span></li>
+                <li>雇用形態: <span th:text="${employmentTypeMsg}"></span></li>
+                <li>所属: <span th:text="${departmentMsg}"></span></li>
+            </ul>
+        </form>
+        <a th:href="@{/home}">
+			<button type="button">ホームへ</button>
+		</a>
+    </div>
+</body>
+</html>

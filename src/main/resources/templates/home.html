@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Home</title>
+</head>
+<body>
+    <h1>ホーム画面</h1>
+	
+	<!-- ログアウト -->
+    <form th:action="@{/logout}" method="post">
+        <!-- CSRFトークンをフォームに含める -->
+        <input type="hidden" name="_csrf" th:value="${_csrf.token}" />
+        <button type="submit">ログアウト</button>
+    </form>
+
+    <!-- ユーザー登録 -->
+    <form th:action="@{/user/register}" method="get">
+        <button type="submit">ユーザー登録</button>
+    </form>
+	
+	<!-- ユーザー一覧 -->
+	<form th:action="@{/user/list}" method="get">
+	    <button type="submit">ユーザー一覧</button>
+	</form>
+	
+	<!-- シフト一覧 -->
+	<form th:action="@{/shift/list}" method="get">
+	    <button type="submit">シフト一覧</button>
+	</form>
+
+
+</body>
+</html>

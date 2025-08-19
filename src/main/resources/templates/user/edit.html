@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>ユーザー編集</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <h2>ユーザー情報の編集</h2>
+    
+    <form th:action="@{/user/edit/confirm}" method="post" th:object="${user}">
+        <input type="hidden" th:field="*{id}" />
+
+        <div>
+            <label for="username">ユーザー名:</label>
+            <input type="text" id="username" th:field="*{username}" required maxlength="100"/>
+            <span th:if="${#fields.hasErrors('username')}" th:errors="*{username}" class="error"></span>
+        </div>
+
+        <div>
+            <label for="role">ユーザーロール:</label>
+            <select id="role" th:field="*{role}">
+                <option value="ADMIN">管理者</option>
+                <option value="USER">一般ユーザー</option>
+            </select>
+            <span th:if="${#fields.hasErrors('role')}" th:errors="*{role}" class="error"></span>
+        </div>
+
+        <div>
+            <label for="firstName">姓:</label>
+            <input type="text" id="firstName" th:field="*{firstName}" required maxlength="50"/>
+            <span th:if="${#fields.hasErrors('firstName')}" th:errors="*{firstName}" class="error"></span>
+        </div>
+
+        <div>
+            <label for="lastName">名:</label>
+            <input type="text" id="lastName" th:field="*{lastName}" required maxlength="50"/>
+            <span th:if="${#fields.hasErrors('lastName')}" th:errors="*{lastName}" class="error"></span>
+        </div>
+
+        <div>
+            <label for="birthDate">生年月日:</label>
+            <input type="date" id="birthDate" th:field="*{birthDate}" required/>
+            <span th:if="${#fields.hasErrors('birthDate')}" th:errors="*{birthDate}" class="error"></span>
+        </div>
+
+        <div>
+            <label for="gender">性別:</label>
+            <select id="gender" th:field="*{gender}">
+                <option value="male">男性</option>
+                <option value="female">女性</option>
+            </select>
+            <span th:if="${#fields.hasErrors('gender')}" th:errors="*{gender}" class="error"></span>
+        </div>
+
+        <div>
+            <label for="employmentType">雇用形態:</label>
+			<select id="employmentType" th:field="*{employmentType}" onchange="togglePartTimeFields()">
+                <option value="fulltime">正社員</option>
+                <option value="parttime">パート</option>
+            </select>
+            <span th:if="${#fields.hasErrors('employmentType')}" th:errors="*{employmentType}" class="error"></span>
+        </div>
+		
+		<!-- パート専用スケジュール -->
+		<div id="partTimeFields" th:style="${user.employmentType == 'parttime'} ? '' : 'display:none;'" style="margin-top: 1em;">
+		    <h4>固定勤務スケジュール（曜日別勤務時間）</h4>
+
+		    <div>
+		        <label>月曜日:</label>
+		        <input type="checkbox" th:field="*{mondayOff}" />休み
+		        <input type="time" th:field="*{mondayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{mondayEndTime}" />
+		    </div>
+		    <div>
+		        <label>火曜日:</label>
+		        <input type="checkbox" th:field="*{tuesdayOff}" />休み
+		        <input type="time" th:field="*{tuesdayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{tuesdayEndTime}" />
+		    </div>
+		    <div>
+		        <label>水曜日:</label>
+		        <input type="checkbox" th:field="*{wednesdayOff}" />休み
+		        <input type="time" th:field="*{wednesdayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{wednesdayEndTime}" />
+		    </div>
+		    <div>
+		        <label>木曜日:</label>
+		        <input type="checkbox" th:field="*{thursdayOff}" />休み
+		        <input type="time" th:field="*{thursdayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{thursdayEndTime}" />
+		    </div>
+		    <div>
+		        <label>金曜日:</label>
+		        <input type="checkbox" th:field="*{fridayOff}" />休み
+		        <input type="time" th:field="*{fridayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{fridayEndTime}" />
+		    </div>
+		    <div>
+		        <label>土曜日:</label>
+		        <input type="checkbox" th:field="*{saturdayOff}" />休み
+		        <input type="time" th:field="*{saturdayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{saturdayEndTime}" />
+		    </div>
+		    <div>
+		        <label>日曜日:</label>
+		        <input type="checkbox" th:field="*{sundayOff}" />休み
+		        <input type="time" th:field="*{sundayStartTime}" />
+		        〜
+		        <input type="time" th:field="*{sundayEndTime}" />
+		    </div>
+		</div>
+
+        <div>
+            <label for="department">所属:</label>
+            <select id="department" th:field="*{department}">
+                <option value="amami">天美</option>
+                <option value="main">本社</option>
+            </select>
+            <span th:if="${#fields.hasErrors('department')}" th:errors="*{department}" class="error"></span>
+        </div>
+
+        <div>
+            <button type="submit">確認</button>
+            <a th:href="@{/user/detail/{id}(id=${user.id})}">戻る</a>
+        </div>
+    </form>
+	
+	<script>
+	function togglePartTimeFields() {
+	    const selected = document.getElementById("employmentType").value;
+	    const partFields = document.getElementById("partTimeFields");
+	    partFields.style.display = (selected === "parttime") ? "block" : "none";
+	}
+	window.onload = togglePartTimeFields;
+	</script>
+	
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>エラーが発生しました</title>
+</head>
+<body>
+    <h1>エラーが発生しました</h1>
+
+    <p th:text="${errorMessage}">予期しないエラーが発生しました。時間をおいて再度お試しください。</p>
+
+    <a href="/" style="color: blue;">ホームに戻る</a>
+</body>
+</html>

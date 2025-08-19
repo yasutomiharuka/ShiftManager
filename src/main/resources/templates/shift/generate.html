@@ -1,0 +1,89 @@
+<form th:action="@{/shift/generate/request/save}" th:object="${form}" method="post">
+    <!-- hidden inputs -->
+    <input type="hidden" th:field="*{department}" th:value="${department}" />
+    <input type="hidden" th:field="*{targetMonth}" th:value="${month}" />
+
+    <!-- hidden shiftRequests[] container -->
+    <div id="request-fields"></div>
+
+    <!-- 表形式 -->
+    <table id="shift-table">
+        <thead>
+            <tr>
+                <th>職員名</th>
+                <th th:each="date : ${dateList}" th:text="${#temporals.format(date, 'M/d')}"></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="user, uStat : ${users}">
+                <td th:text="${user.lastName + ' ' + user.firstName}"></td>
+                <td th:each="date, dStat : ${dateList}"
+                    class="cell"
+                    th:attr="data-user-id=${user.id},data-date=${date}">
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <br>
+    <button type="submit" onclick="prepareFormData()">保存</button>
+</form>
+
+<!-- JS部分 -->
+<script>
+    let currentMode = 'normal';
+
+    function setMode(mode) {
+        currentMode = mode;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        document.querySelectorAll(".cell").forEach(cell => {
+            cell.addEventListener("click", () => {
+                if (currentMode === "request") toggleRequest(cell);
+                else if (currentMode === "temporary") toggleTemporary(cell);
+            });
+        });
+    });
+
+    function toggleRequest(cell) {
+        const v = cell.innerText;
+        cell.innerText = v === "休" ? "有" : v === "有" ? "" : "休";
+        updateClass(cell);
+    }
+
+    function toggleTemporary(cell) {
+        const v = cell.innerText;
+        cell.innerText = v === "臨" ? "" : "臨";
+        updateClass(cell);
+    }
+
+    function updateClass(cell) {
+        cell.classList.remove("休", "有", "臨");
+        if (cell.innerText) cell.classList.add(cell.innerText);
+    }
+
+    // 🔽 submit時に hidden input を構築してフォーム送信に含める
+    function prepareFormData() {
+        const container = document.getElementById("request-fields");
+        container.innerHTML = ""; // 一度リセット
+
+        let index = 0;
+        document.querySelectorAll(".cell").forEach(cell => {
+            const type = cell.innerText;
+            if (!["休", "有"].includes(type)) return;
+
+            const userId = cell.dataset.userId;
+            const date = cell.dataset.date;
+            const department = document.querySelector('input[name="department"]').value;
+
+            container.innerHTML += `
+                <input type="hidden" name="shiftRequests[${index}].userId" value="${userId}" />
+                <input type="hidden" name="shiftRequests[${index}].date" value="${date}" />
+                <input type="hidden" name="shiftRequests[${index}].requestType" value="${type}" />
+                <input type="hidden" name="shiftRequests[${index}].department" value="${department}" />
+            `;
+            index++;
+        });
+    }
+</script>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>ユーザー削除確認</title>
+</head>
+<body>
+    <h1>ユーザー削除確認</h1>
+
+    <p>以下のユーザーを削除してもよろしいですか？</p>
+
+	<!-- 事前にメッセージキーを解決する -->
+	<div th:with="
+	    roleKey='role.' + ${user.role},
+	    genderKey='gender.' + ${user.gender},
+	    employmentTypeKey='employment_type.' + ${user.employmentType},
+	    departmentKey='department.' + ${user.department},
+	    roleMsg=${#messages.msg(roleKey)},
+	    genderMsg=${#messages.msg(genderKey)},
+	    employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+	    departmentMsg=${#messages.msg(departmentKey)}
+	">
+	    <table border="1">
+	        <tr>
+	            <th>ユーザーID</th>
+	            <td th:text="${user.id}"></td>
+	        </tr>
+	        <tr>
+	            <th>ユーザー名</th>
+	            <td th:text="${user.username}"></td>
+	        </tr>
+	        <tr>
+	            <th>姓</th>
+	            <td th:text="${user.firstName}"></td>
+	        </tr>
+	        <tr>
+	            <th>名</th>
+	            <td th:text="${user.lastName}"></td>
+	        </tr>
+	        <tr>
+	            <th>生年月日</th>
+	            <td th:text="${user.birthDate}"></td>
+	        </tr>
+	        <tr>
+	            <th>性別</th>
+	            <td th:text="${genderMsg}"></td>
+	        </tr>
+	        <tr>
+	            <th>雇用形態</th>
+	            <td th:text="${employmentTypeMsg}"></td>
+	        </tr>
+	        <tr>
+	            <th>所属</th>
+	            <td th:text="${departmentMsg}"></td>
+	        </tr>
+	    </table>
+	</div>
+
+
+		<form th:action="@{/user/delete/{id}(id=${user.id})}" method="post">
+		    <!-- CSRFトークン -->
+		    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+		    <!-- hidden fields -->
+		    <input type="hidden" name="id" th:value="${user.id}" />
+		    <input type="hidden" name="username" th:value="${user.username}" />
+		    <input type="hidden" name="firstName" th:value="${user.firstName}" />
+		    <input type="hidden" name="lastName" th:value="${user.lastName}" />
+		    <input type="hidden" name="role" th:value="${user.role}" />
+		    <input type="hidden" name="birthDate" th:value="${user.birthDate}" />
+		    <input type="hidden" name="gender" th:value="${user.gender}" />
+		    <input type="hidden" name="employmentType" th:value="${user.employmentType}" />
+		    <input type="hidden" name="department" th:value="${user.department}" />
+
+		    <!-- 削除実行・戻るボタン -->
+		    <button type="submit">はい</button>
+		    <button type="button" onclick="history.back()">戻る</button>
+		</form>
+
+    </div>
+</body>
+</html>

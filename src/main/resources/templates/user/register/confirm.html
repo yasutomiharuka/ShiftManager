@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>登録内容確認</title>
+</head>
+<body>
+    <h1>登録内容確認</h1>
+
+    <!-- 事前にメッセージキーを解決する -->
+    <div th:with="
+        roleKey='role.' + ${userProfileDto.role},
+        genderKey='gender.' + ${userProfileDto.gender},
+        employmentTypeKey='employment_type.' + ${userProfileDto.employmentType},
+        departmentKey='department.' + ${userProfileDto.department},
+        roleMsg=${#messages.msg(roleKey)},
+        genderMsg=${#messages.msg(genderKey)},
+        employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+        departmentMsg=${#messages.msg(departmentKey)}
+    ">
+        <form action="/user/register/complete" method="post" th:object="${userProfileDto}">
+            <!-- CSRFトークン -->
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+
+            <p>ユーザー名: <span th:text="*{username}"></span></p>
+            <p>パスワード: ******</p>>
+            <p>姓: <span th:text="*{firstName}"></span></p>
+            <p>名: <span th:text="*{lastName}"></span></p>
+            <p>ユーザーロール: <span th:text="${roleMsg}"></span></p>
+            <p>生年月日: <span th:text="*{birthDate}"></span></p>
+            <p>性別: <span th:text="${genderMsg}"></span></p>
+            <p>雇用形態: <span th:text="${employmentTypeMsg}"></span></p>
+			<!-- 固定勤務スケジュール（パートのみ） -->
+			 <div th:if="*{employmentType} == 'parttime'">
+			     <h3>固定勤務スケジュール</h3>
+
+			     <p>月曜日：<span th:text="*{mondayOff} ? '休み' : *{mondayStartTime} + '〜' + *{mondayEndTime}"></span></p>
+			     <p>火曜日：<span th:text="*{tuesdayOff} ? '休み' : *{tuesdayStartTime} + '〜' + *{tuesdayEndTime}"></span></p>
+			     <p>水曜日：<span th:text="*{wednesdayOff} ? '休み' : *{wednesdayStartTime} + '〜' + *{wednesdayEndTime}"></span></p>
+			     <p>木曜日：<span th:text="*{thursdayOff} ? '休み' : *{thursdayStartTime} + '〜' + *{thursdayEndTime}"></span></p>
+			     <p>金曜日：<span th:text="*{fridayOff} ? '休み' : *{fridayStartTime} + '〜' + *{fridayEndTime}"></span></p>
+			     <p>土曜日：<span th:text="*{saturdayOff} ? '休み' : *{saturdayStartTime} + '〜' + *{saturdayEndTime}"></span></p>
+			     <p>日曜日：<span th:text="*{sundayOff} ? '休み' : *{sundayStartTime} + '〜' + *{sundayEndTime}"></span></p>
+			 </div>            
+			<p>所属: <span th:text="${departmentMsg}"></span></p>
+
+            <!-- hidden fields nullによるバリデーションエラーを防ぐ-->
+            <input type="hidden" th:field="*{username}" />
+            <input type="hidden" th:field="*{password}" />
+            <input type="hidden" th:field="*{firstName}" />
+            <input type="hidden" th:field="*{lastName}" />
+            <input type="hidden" th:field="*{role}" />
+            <input type="hidden" th:field="*{birthDate}" />
+            <input type="hidden" th:field="*{gender}" />
+            <input type="hidden" th:field="*{employmentType}" />
+            <input type="hidden" th:field="*{department}" />
+			<input type="hidden" th:field="*{mondayOff}" />
+			
+			<input type="hidden" th:field="*{mondayStartTime}" />
+			<input type="hidden" th:field="*{mondayEndTime}" />
+			<input type="hidden" th:field="*{tuesdayOff}" />
+			<input type="hidden" th:field="*{tuesdayStartTime}" />
+			<input type="hidden" th:field="*{tuesdayEndTime}" />
+	        <input type="hidden" th:field="*{wednesdayOff}" />
+	        <input type="hidden" th:field="*{wednesdayStartTime}" />
+	        <input type="hidden" th:field="*{wednesdayEndTime}" />
+	        <input type="hidden" th:field="*{thursdayOff}" />
+	        <input type="hidden" th:field="*{thursdayStartTime}" />
+	        <input type="hidden" th:field="*{thursdayEndTime}" />
+	        <input type="hidden" th:field="*{fridayOff}" />
+	        <input type="hidden" th:field="*{fridayStartTime}" />
+	        <input type="hidden" th:field="*{fridayEndTime}" />
+	        <input type="hidden" th:field="*{saturdayOff}" />
+	        <input type="hidden" th:field="*{saturdayStartTime}" />
+	        <input type="hidden" th:field="*{saturdayEndTime}" />
+	        <input type="hidden" th:field="*{sundayOff}" />
+	        <input type="hidden" th:field="*{sundayStartTime}" />
+	        <input type="hidden" th:field="*{sundayEndTime}" />
+
+
+            <!-- ボタン -->
+            <button type="submit">完了</button>
+            <button type="button" onclick="history.back()">戻る</button>
+        </form>
+    </div>
+</body>
+</html>
