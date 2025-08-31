@@ -1,89 +1,276 @@
-<form th:action="@{/shift/generate/request/save}" th:object="${form}" method="post">
-    <!-- hidden inputs -->
-    <input type="hidden" th:field="*{department}" th:value="${department}" />
-    <input type="hidden" th:field="*{targetMonth}" th:value="${month}" />
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <title>シフト生成</title>
+  <style>
+    /* 一覧と同系色で統一 */
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
+    .日 { background-color: #e0f7fa; }   /* 水色 */
+    .夜 { background-color: #d1c4e9; }   /* 紫 */
+    .明 { background-color: #ffe0b2; }   /* オレンジ */
+    .休 { background-color: #b3e5fc; }   /* 青 */
+    .有 { background-color: #fff9c4; }   /* 黄色 */
+    .臨\(確\) { background-color: #c8e6c9; } /* 緑  ※CSSは()をエスケープ */
+    .臨\(自\) { background-color: #f0f4c3; } /* 黄緑 ※CSSは()をエスケープ */
 
-    <!-- hidden shiftRequests[] container -->
-    <div id="request-fields"></div>
+    .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .panel { border: 1px solid #ddd; padding: 10px; margin: 12px 0; }
+    .muted { color: #666; font-size: 0.9em; }
+    .cell-btn { width: 100%; border: none; background: transparent; padding: 4px 0; cursor: pointer; }
+    .sticky-col { position: sticky; left: 0; background: #fff; }
+    .sticky-head { position: sticky; top: 0; background: #fafafa; z-index: 1; }
+    .legend { display: flex; gap: 8px; flex-wrap: wrap; }
+    .legend span { padding: 2px 6px; border: 1px solid #ccc; border-radius: 4px; }
+  </style>
+</head>
+<body>
 
-    <!-- 表形式 -->
-    <table id="shift-table">
-        <thead>
-            <tr>
-                <th>職員名</th>
-                <th th:each="date : ${dateList}" th:text="${#temporals.format(date, 'M/d')}"></th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr th:each="user, uStat : ${users}">
-                <td th:text="${user.lastName + ' ' + user.firstName}"></td>
-                <td th:each="date, dStat : ${dateList}"
-                    class="cell"
-                    th:attr="data-user-id=${user.id},data-date=${date}">
-                </td>
-            </tr>
-        </tbody>
-    </table>
+<!-- ▼ タイトル：selectedDepartmentName / month はnull時のフォールバックを用意 -->
+<h2 th:text="${(selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択'))} + '／' + (month != null ? month : '未指定') + ' のシフト生成'">
+  シフト生成
+</h2>
 
-    <br>
-    <button type="submit" onclick="prepareFormData()">保存</button>
+<!-- ▼ データ欠落時の早期案内パネル -->
+<!-- 同一タグで th:with → th:if を併用せず、直接判定にする -->
+<div class="panel" style="background:#fffde7;"
+     th:if="${(users == null or #lists.isEmpty(users)) 
+             or (dates == null or #lists.isEmpty(dates))}">
+  <div class="muted">
+    <strong>注意:</strong>
+    <span th:if="${users == null or #lists.isEmpty(users)}">
+      表示できる職員がいません（部署選択をご確認ください）。
+    </span>
+    <span th:if="${(users == null or #lists.isEmpty(users)) 
+                  and (dates == null or #lists.isEmpty(dates))}">／</span>
+    <span th:if="${dates == null or #lists.isEmpty(dates)}">
+      対象月の日付が取得できませんでした（URLの <code>?month=yyyy-MM</code> を確認）。
+    </span>
+  </div>
+</div>
+
+<!-- ▼ フィルタ／遷移：departmentNames, departments が null の場合でも空ループで落ちない -->
+<form method="get" th:action="@{/shift/generate}" class="toolbar">
+  <label>部署:</label>
+  <select name="department">
+    <option th:each="deptCode : ${departments != null ? departments : {}}"
+            th:value="${deptCode}"
+            th:text="${departmentNames != null ? departmentNames[deptCode.toString()] : deptCode}"
+            th:selected="${deptCode == department}">
+      <!-- options -->
+    </option>
+  </select>
+
+  <label>月:</label>
+  <!-- month は YearMonth を想定。null の場合は空表示 -->
+  <input type="month" name="month" th:value="${month != null ? month : ''}"/>
+
+  <button type="submit">表示</button>
+
+  <span class="muted">／ 画面遷移:</span>
+  <a th:href="@{/shift/list(department=${department}, month=${month})}">シフト一覧</a> |
+  <a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集</a>
 </form>
 
-<!-- JS部分 -->
+<!-- ▼ モード切替（フロントのみ。POST時は hiddenのmodeで受け取れる） -->
+<div class="panel">
+  <strong>入力モード</strong>：
+  <button type="button" onclick="setMode('normal')">通常</button>
+  <button type="button" onclick="setMode('request')">希望休・有給</button>
+  <button type="button" onclick="setMode('temp')">臨時職員（事前）</button>
+  <span class="muted">（セルをクリックして切替）</span>
+
+  <div class="legend" style="margin-top:8px;">
+    <span class="日">日</span>
+    <span class="夜">夜</span>
+    <span class="明">明</span>
+    <span class="休">休</span>
+    <span class="有">有</span>
+    <span class="臨(確)">臨(確)</span>
+    <span class="臨(自)">臨(自)</span>
+  </div>
+</div>
+
+<!-- ▼ メイン表（ユーザー×日付） -->
+<form id="generateForm" method="post" th:action="@{/shift/generate}">
+  <!-- 画面状態の保持 -->
+  <input type="hidden" name="department" th:value="${department != null ? department : ''}">
+  <input type="hidden" name="month"      th:value="${month != null ? month : ''}">
+  <input type="hidden" id="mode" name="mode" value="normal">
+  
+  <!-- shiftMap が空なら初期状態の案内を表示 -->
+  <div class="panel" style="background:#f1f8e9;"
+       th:if="${shiftMap == null or #maps.isEmpty(shiftMap)}">
+    <div class="muted">
+      この月のシフトデータはまだ登録されていません。<br>
+      セルをクリックして入力するか、<strong>「シフトを生成する」</strong> を押して自動割当を実行してください。
+    </div>
+  </div>
+
+  <table>
+    <thead class="sticky-head">
+      <tr>
+        <th class="sticky-col">職員名</th>
+        <!-- dates が null の場合でも空ループ（ヘッダのみ） -->
+        <th th:each="d : ${dates != null ? dates : {}}"
+            th:text="${#temporals.format(d, 'M/d(E)')}">
+          <!-- 日付 -->
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- users が null の場合でも空ループ -->
+      <tr th:each="user : ${users != null ? users : {}}">
+        <td class="sticky-col"
+            th:text="${(user != null && user.lastName != null ? user.lastName : '') + ' ' + (user != null && user.firstName != null ? user.firstName : '')}">
+          氏名
+        </td>
+
+        <!-- セル：shiftMap が null でも落ちないように th:with で val を取得し三項でガード -->
+        <td th:each="d : ${dates != null ? dates : {}}"
+            th:with="key=${user.id + '_' + d}, val=${shiftMap != null ? shiftMap[key] : null}"
+            th:classappend="${val != null ? val : ''}">
+
+          <!-- 表示用ボタン（クリックで値を進める）。表示は val が null の時 '-' -->
+          <button type="button"
+                  class="cell-btn"
+                  th:id="${'btn_' + user.id + '_' + d}"
+                  th:text="${val != null ? val : '-'}"
+                  onclick="cycleCell(this)">
+          </button>
+
+          <!-- 送信用 hidden（nameは userId_date で一意）。null の場合は空文字で送る -->
+          <input type="hidden"
+                 th:id="${'val_' + user.id + '_' + d}"
+                 th:name="${'shifts[' + user.id + '_' + d + ']'}"
+                 th:value="${val != null ? val : ''}">
+        </td>
+      </tr>
+      <!-- users または dates が空の場合のフォールバック表示 -->
+      <tr th:if="${users == null || #lists.isEmpty(users)}">
+        <td colspan="999" class="muted">表示できる職員がいません（部署選択をご確認ください）。</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="muted" style="margin-top:6px;">
+    <!-- モードの切替ルールを明示 -->
+    ※ 通常モード：<code>日 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
+    希望休モード：<code>休 → 有 → -</code>／
+    臨時モード：<code>臨(確) → -</code>
+  </div>
+
+  <br>
+
+  <!-- ▼ 必要人員（時間帯ごと）。requirements も POST でまとめて送る -->
+  <div class="panel">
+    <strong>必要人員の入力（部署別・時間帯）</strong>
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          <th>9:00-14:00</th>
+          <th>14:00-16:00</th>
+          <th>16:00-18:00</th>
+          <th>夜間帯</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- dates が null でも空ループ -->
+        <tr th:each="d : ${dates != null ? dates : {}}">
+          <td th:text="${#temporals.format(d, 'M/d')}">M/d</td>
+          <td><input type="number" min="0" th:name="${'requirements[' + d + '_9:00-14:00]'}"></td>
+          <td><input type="number" min="0" th:name="${'requirements[' + d + '_14:00-16:00]'}"></td>
+          <td><input type="number" min="0" th:name="${'requirements[' + d + '_16:00-18:00]'}"></td>
+          <td><input type="number" min="0" th:name="${'requirements[' + d + '_夜間帯]'}"></td>
+        </tr>
+        <tr th:if="${dates == null || #lists.isEmpty(dates)}">
+          <td colspan="5" class="muted">対象月の日付が取得できませんでした。</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="muted">
+      ※ 保存先想定：<code>ShiftRequirement(date / department / timeSlot / requiredCount)</code>
+    </div>
+  </div>
+
+  <!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
+  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <!-- 希望休（休／有）保存 -->
+    <button type="submit"
+            formaction="/api/shift/request/save"
+            formmethod="post">
+      希望休を保存
+    </button>
+
+    <!-- 臨時職員（事前）保存 -->
+    <button type="submit"
+            formaction="/api/shift/temp/save"
+            formmethod="post">
+      臨時職員を保存
+    </button>
+
+    <!-- 自動割当 実行 -->
+    <button type="submit"
+            formaction="/shift/generate"
+            formmethod="post">
+      シフトを生成する
+    </button>
+
+    <!-- 戻る -->
+    <a th:href="@{/shift/list(department=${department}, month=${month})}">一覧へ戻る</a>
+  </div>
+</form>
+
 <script>
-    let currentMode = 'normal';
+  // ========== フロント側の最小ロジック ==========
 
-    function setMode(mode) {
-        currentMode = mode;
+  // 勤務種別の回し方（UI定義）
+  const cycleNormal  = ['日','夜','明','休','有','臨(確)','臨(自)','-'];
+  const cycleRequest = ['休','有','-'];
+  const cycleTemp    = ['臨(確)','-'];
+
+  function currentCycle(){
+    // hidden の mode を参照して、サイクルを切り替える
+    const m = document.getElementById('mode').value;
+    if(m === 'request') return cycleRequest;
+    if(m === 'temp')    return cycleTemp;
+    return cycleNormal;
+  }
+
+  function setMode(m){
+    // 画面表示のみ切替（POST時は hidden の mode でサーバへ渡る）
+    document.getElementById('mode').value = m;
+  }
+
+  function cycleCell(btn){
+    // ボタンIDは "btn_userId_YYYY-MM-DD" を想定
+    const id = btn.id.replace('btn_',''); // userId_YYYY-MM-DD
+    const hidden = document.getElementById('val_' + id);
+    const before = (hidden && hidden.value ? hidden.value.trim() : '');
+    const cycle = currentCycle();
+
+    // 次値へ
+    let idx = cycle.indexOf(before);
+    idx = (idx === -1) ? 0 : (idx + 1) % cycle.length;
+    const next = cycle[idx];
+
+    // 表示更新（next が '' の場合は '-' 表示）
+    btn.textContent = next === '' ? '-' : next;
+
+    // 背景色のため class を差し替え（いったんクラスをリセット）
+    // ※ 親の td のクラスは最初から複数付く可能性があるため、簡易に全部消してから追加
+    btn.parentElement.className = '';
+    if(next && next !== '-') {
+      // CSSセレクタ上の()はエスケープが必要だが、class属性の値は "臨(確)" でOK
+      btn.parentElement.classList.add(next);
     }
 
-    document.addEventListener("DOMContentLoaded", () => {
-        document.querySelectorAll(".cell").forEach(cell => {
-            cell.addEventListener("click", () => {
-                if (currentMode === "request") toggleRequest(cell);
-                else if (currentMode === "temporary") toggleTemporary(cell);
-            });
-        });
-    });
-
-    function toggleRequest(cell) {
-        const v = cell.innerText;
-        cell.innerText = v === "休" ? "有" : v === "有" ? "" : "休";
-        updateClass(cell);
-    }
-
-    function toggleTemporary(cell) {
-        const v = cell.innerText;
-        cell.innerText = v === "臨" ? "" : "臨";
-        updateClass(cell);
-    }
-
-    function updateClass(cell) {
-        cell.classList.remove("休", "有", "臨");
-        if (cell.innerText) cell.classList.add(cell.innerText);
-    }
-
-    // 🔽 submit時に hidden input を構築してフォーム送信に含める
-    function prepareFormData() {
-        const container = document.getElementById("request-fields");
-        container.innerHTML = ""; // 一度リセット
-
-        let index = 0;
-        document.querySelectorAll(".cell").forEach(cell => {
-            const type = cell.innerText;
-            if (!["休", "有"].includes(type)) return;
-
-            const userId = cell.dataset.userId;
-            const date = cell.dataset.date;
-            const department = document.querySelector('input[name="department"]').value;
-
-            container.innerHTML += `
-                <input type="hidden" name="shiftRequests[${index}].userId" value="${userId}" />
-                <input type="hidden" name="shiftRequests[${index}].date" value="${date}" />
-                <input type="hidden" name="shiftRequests[${index}].requestType" value="${type}" />
-                <input type="hidden" name="shiftRequests[${index}].department" value="${department}" />
-            `;
-            index++;
-        });
-    }
+    // 送信値更新（"-" は空文字に）
+    if (hidden) hidden.value = (next === '-' ? '' : next);
+  }
 </script>
+
+</body>
+</html>
