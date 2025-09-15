@@ -2,7 +2,6 @@ package com.example.demo.controller;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -17,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import com.example.demo.dto.UserProfileDto;
 import com.example.demo.form.ShiftGenerationForm;
 import com.example.demo.service.ShiftGenerationService;
+import com.example.demo.service.ShiftService;
 import com.example.demo.service.UserProfileService;
 
 /**
@@ -31,11 +31,14 @@ public class ShiftGenerationController {
     // --- サービスをDI（依存性注入） ---
     private final ShiftGenerationService shiftGenerationService;
     private final UserProfileService userProfileService;
+    private final ShiftService shiftService;
 
     public ShiftGenerationController(ShiftGenerationService shiftGenerationService,
-                                     UserProfileService userProfileService) {
+                                     UserProfileService userProfileService,
+                                     ShiftService shiftService) {
         this.shiftGenerationService = shiftGenerationService;
         this.userProfileService = userProfileService;
+        this.shiftService = shiftService;
     }
 
     /**
@@ -67,18 +70,16 @@ public class ShiftGenerationController {
                     .toList();
             System.out.println("▶ ユーザー件数: " + users.size());
 
-            // --- 4. 部署コードと日本語表示名のマッピング ---
+            // --- 4. シフト情報を取得 ---
+            Map<String, String> shiftMap = shiftService.getShiftMap(users, dates, department);
+
+            // --- 5. 部署コードと日本語表示名のマッピング ---
             Map<String, String> departmentDisplayMap = Map.of(
                     "amami", "天美",
                     "main", "本社"
             );
 
-            // ★ 追加：テンプレで参照する shiftMap は必ず non-null に
-            Map<String, String> shiftMap = new HashMap<>();
-            // 既存シフトを表示したい場合は、必要になったらサービスを呼び出して上書きする
-            // shiftMap = shiftService.buildShiftMap(department, targetMonth);
-
-            // --- 5. Thymeleafに渡す値をmodelにセット ---
+            // --- 6. Thymeleafに渡す値をmodelにセット ---
             model.addAttribute("users", users);                     // 表示対象のユーザー
             model.addAttribute("dates", dates);                     // 日付リスト
             model.addAttribute("department", department);           // 部署コード
@@ -95,9 +96,6 @@ public class ShiftGenerationController {
             boolean noDates = (dates == null || dates.isEmpty());
             model.addAttribute("noUsers", noUsers);
             model.addAttribute("noDates", noDates);
-
-            // shiftMap をまだ使うテンプレートがある場合の NPE/SpEL 回避（空マップを渡す）
-            model.addAttribute("shiftMap", new java.util.HashMap<String, String>());
 
             // form が null にならないように保険
             if (model.getAttribute("form") == null) {
