@@ -2,7 +2,12 @@ package com.example.demo.form;
 
 import java.time.YearMonth;
 import java.util.List;
+import java.util.Map;
 
+/**
+ * シフト生成画面から送信されるフォームオブジェクト。
+ * 希望休・臨時職員・シフト入力をまとめて受け取る。
+ */
 public class ShiftGenerationForm {
 
     // 希望休・有給の入力（shiftRequests[0].userId などでフォームにバインド可能）
@@ -16,6 +21,10 @@ public class ShiftGenerationForm {
 
     // 所属部署（例: "amami", "main"）
     private String department;
+
+    // ▼ 追加: ユーザー×日付のシフト入力結果
+    // HTML側では name="shifts[123_2025-09-11]" value="日" のように送信される想定
+    private Map<String, String> shifts;
 
     // --- Getter / Setter ---
 
@@ -49,5 +58,14 @@ public class ShiftGenerationForm {
 
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    // ▼ 新規追加: shifts の Getter / Setter
+    public Map<String, String> getShifts() {
+        return shifts;
+    }
+
+    public void setShifts(Map<String, String> shifts) {
+        this.shifts = shifts;
     }
 }

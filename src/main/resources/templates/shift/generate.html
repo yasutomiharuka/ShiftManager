@@ -23,6 +23,12 @@
     .sticky-head { position: sticky; top: 0; background: #fafafa; z-index: 1; }
     .legend { display: flex; gap: 8px; flex-wrap: wrap; }
     .legend span { padding: 2px 6px; border: 1px solid #ccc; border-radius: 4px; }
+
+    /* ▼ 追加：上部パレット（ペイント方式） */
+    .palette { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .palette .swatch { padding: 4px 8px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; user-select: none; }
+    .palette .swatch.active { outline: 2px solid #1976d2; }
+    .kbd { font: 12px/1 Consolas, monospace; padding: 2px 6px; border: 1px solid #ccc; border-bottom-width: 2px; border-radius: 4px; background: #fff; }
   </style>
 </head>
 <body>
@@ -92,8 +98,29 @@
   </div>
 </div>
 
+<!-- ▼ 追加：ペイント用パレット（ホットキー対応） -->
+<div class="panel">
+  <div class="palette" id="palette">
+    <!-- data-val で値、data-key で推奨キーを明示 -->
+    <span>ペイント:</span>
+    <span class="swatch 日 active" data-val="日" data-key="1">日 <span class="kbd">1</span></span>
+    <span class="swatch 夜" data-val="夜" data-key="2">夜 <span class="kbd">2</span></span>
+    <span class="swatch 明" data-val="明" data-key="3">明 <span class="kbd">3</span></span>
+    <span class="swatch 休" data-val="休" data-key="4">休 <span class="kbd">4</span></span>
+    <span class="swatch 有" data-val="有" data-key="5">有 <span class="kbd">5</span></span>
+    <span class="swatch 臨(確)" data-val="臨(確)" data-key="6">臨(確) <span class="kbd">6</span></span>
+    <span class="swatch 臨(自)" data-val="臨(自)" data-key="7">臨(自) <span class="kbd">7</span></span>
+    <span class="swatch" data-val="-" data-key="0">クリア <span class="kbd">0</span></span>
+    <span class="muted">／ ドラッグで範囲塗り、<span class="kbd">Alt</span> を押しながらで一時的にクリア。</span>
+  </div>
+</div>
+
 <!-- ▼ メイン表（ユーザー×日付） -->
 <form id="generateForm" method="post" th:action="@{/shift/generate}">
+	
+  <!-- CSRFトークンの設置 -->
+  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
   <!-- 画面状態の保持 -->
   <input type="hidden" name="department" th:value="${department != null ? department : ''}">
   <input type="hidden" name="month"      th:value="${month != null ? month : ''}">
@@ -108,7 +135,7 @@
     </div>
   </div>
 
-  <table>
+  <table id="shiftTable">
     <thead class="sticky-head">
       <tr>
         <th class="sticky-col">職員名</th>
@@ -131,13 +158,15 @@
         <td th:each="d : ${dates != null ? dates : {}}"
             th:with="key=${user.id + '_' + d}, val=${shiftMap != null ? shiftMap[key] : null}"
             th:classappend="${val != null ? val : ''}">
-
-          <!-- 表示用ボタン（クリックで値を進める）。表示は val が null の時 '-' -->
-          <button type="button"
-                  class="cell-btn"
-                  th:id="${'btn_' + user.id + '_' + d}"
-                  th:text="${val != null ? val : '-'}"
-                  onclick="cycleCell(this)">
+          
+          <!-- ▼ 追加：属性保持（onclickは削除） -->
+          <button
+            type="button"
+            class="cell-btn"
+            th:id="${'btn_' + user.id + '_' + d}"
+            th:data-user-id="${user.id}"
+            th:data-date="${d}"
+            th:text="${val != null ? val : '-'}">
           </button>
 
           <!-- 送信用 hidden（nameは userId_date で一意）。null の場合は空文字で送る -->
@@ -159,6 +188,9 @@
     ※ 通常モード：<code>日 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
     希望休モード：<code>休 → 有 → -</code>／
     臨時モード：<code>臨(確) → -</code>
+    <br>
+    <!-- ▼ 追加：操作ヘルプ -->
+    ※ ペイント：上のパレットで種別選択 → セルをドラッグして塗りつぶし／数字キー <code>1〜7</code> で即変更、<code>0</code> でクリア、<code>Alt</code> を押しながらドラッグで一時的クリア
   </div>
 
   <br>
@@ -197,23 +229,41 @@
 
   <!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
   <div style="display:flex; gap:10px; flex-wrap:wrap;">
-    <!-- 希望休（休／有）保存 -->
+
+    <!-- 一時保存（下書き） -->
     <button type="submit"
-            formaction="/api/shift/request/save"
-            formmethod="post">
-      希望休を保存
+            th:formaction="@{/api/shift/request/save}"
+            formmethod="post"
+            name="mode" value="DRAFT">
+      一時保存
     </button>
 
-    <!-- 臨時職員（事前）保存 -->
+    <!-- 確定（生成に反映） -->
     <button type="submit"
-            formaction="/api/shift/temp/save"
+            th:formaction="@{/api/shift/request/save}"
+            formmethod="post"
+            name="mode" value="CONFIRMED">
+      確定（生成に反映）
+    </button>
+
+    <!-- 確定解除（確定→下書きに戻す想定） -->
+    <button type="submit"
+            th:formaction="@{/api/shift/request/save}"
+            formmethod="post"
+            name="mode" value="UNCONFIRM">
+      確定解除
+    </button>
+
+    <!-- 臨時職員（事前）保存：従来のAPIを利用 -->
+    <button type="submit"
+            th:formaction="@{/api/shift/temp/save}"
             formmethod="post">
       臨時職員を保存
     </button>
 
-    <!-- 自動割当 実行 -->
+    <!-- 自動割当 実行（既存の生成処理へ） -->
     <button type="submit"
-            formaction="/shift/generate"
+            th:formaction="@{/shift/generate}"
             formmethod="post">
       シフトを生成する
     </button>
@@ -221,6 +271,7 @@
     <!-- 戻る -->
     <a th:href="@{/shift/list(department=${department}, month=${month})}">一覧へ戻る</a>
   </div>
+
 </form>
 
 <script>
@@ -244,32 +295,144 @@
     document.getElementById('mode').value = m;
   }
 
-  function cycleCell(btn){
+  // ▼ 共通：セルへ値を適用（ペイント／サイクルの両方から呼び出す）
+  function applyToCell(btn, value){
     // ボタンIDは "btn_userId_YYYY-MM-DD" を想定
     const id = btn.id.replace('btn_',''); // userId_YYYY-MM-DD
     const hidden = document.getElementById('val_' + id);
-    const before = (hidden && hidden.value ? hidden.value.trim() : '');
-    const cycle = currentCycle();
 
-    // 次値へ
-    let idx = cycle.indexOf(before);
-    idx = (idx === -1) ? 0 : (idx + 1) % cycle.length;
-    const next = cycle[idx];
+    // 表示更新（value が '' または '-' の場合は '-' 表示）
+    const next = (value === '' || value === '-') ? '-' : value;
+    btn.textContent = next;
 
-    // 表示更新（next が '' の場合は '-' 表示）
-    btn.textContent = next === '' ? '-' : next;
-
-    // 背景色のため class を差し替え（いったんクラスをリセット）
-    // ※ 親の td のクラスは最初から複数付く可能性があるため、簡易に全部消してから追加
-    btn.parentElement.className = '';
-    if(next && next !== '-') {
-      // CSSセレクタ上の()はエスケープが必要だが、class属性の値は "臨(確)" でOK
-      btn.parentElement.classList.add(next);
-    }
+    // 背景色クラスの更新（親 td のクラスを一度リセットし、必要なら追加）
+    const td = btn.parentElement;
+    td.className = '';
+    if(next && next !== '-') td.classList.add(next);
 
     // 送信値更新（"-" は空文字に）
     if (hidden) hidden.value = (next === '-' ? '' : next);
   }
+
+  // ▼ 従来の“サイクル”処理（Ctrl/⌘クリック時だけ使う）
+  function doCycle(btn){
+    const id = btn.id.replace('btn_','');
+    const hidden = document.getElementById('val_' + id);
+    const before = (hidden && hidden.value ? hidden.value.trim() : '');
+    const cycle = currentCycle();
+
+    let idx = cycle.indexOf(before);
+    idx = (idx === -1) ? 0 : (idx + 1) % cycle.length;
+    applyToCell(btn, cycle[idx]);
+  }
+
+  // ===== ここから「ペイント方式」追加 =====
+  const palette = document.getElementById('palette');
+  const shiftTable = document.getElementById('shiftTable');
+
+  let paintVal = '日';     // デフォルトの塗り値
+  let isDragging = false;  // ドラッグ中フラグ
+
+  // パレット選択
+  if (palette) {
+    palette.addEventListener('click', (e) => {
+      const sw = e.target.closest('.swatch');
+      if (!sw) return;
+      paintVal = sw.dataset.val || '日';
+      // Active表示切替
+      palette.querySelectorAll('.swatch').forEach(el => el.classList.remove('active'));
+      sw.classList.add('active');
+    });
+  }
+
+  // 数字キーでパレット＆セルを即変更（フォーカスがテーブル内のとき）
+  const keyMap = {'1':'日','2':'夜','3':'明','4':'休','5':'有','6':'臨(確)','7':'臨(自)','0':'-'};
+  shiftTable.addEventListener('keydown', (e) => {
+    if (keyMap[e.key]) {
+      // フォーカス中のボタンに適用
+      const btn = e.target.closest('.cell-btn');
+      if (btn) {
+        applyToCell(btn, keyMap[e.key]);
+        e.preventDefault();
+      }
+      // パレットのハイライトも切り替え
+      const sw = palette?.querySelector(`.swatch[data-val="${keyMap[e.key]}"]`);
+      if (sw) {
+        palette.querySelectorAll('.swatch').forEach(el => el.classList.remove('active'));
+        sw.classList.add('active');
+        paintVal = keyMap[e.key]; // パレット状態も同期
+      }
+    }
+  });
+
+  // ドラッグ塗り（Alt押下中は一時的にクリア）
+  const pickTargetBtn = (ev) => {
+    const target = ev.target.closest('.cell-btn');
+    return target || null;
+  };
+
+  shiftTable.addEventListener('mousedown', (e) => {
+    const btn = pickTargetBtn(e);
+    if (!btn) return;
+
+    // Ctrl/⌘クリックは“サイクル”のため、ここでは塗らない
+    if (e.ctrlKey || e.metaKey) {
+      isDragging = false; // ドラッグ開始扱いにしない
+      return;
+    }
+
+    // 単発クリック or ドラッグ開始で“ペイント”
+    isDragging = true;
+    const val = e.altKey ? '-' : paintVal; // Altでクリア
+    applyToCell(btn, val);
+    e.preventDefault(); // テキスト選択防止
+  });
+
+  shiftTable.addEventListener('mouseover', (e) => {
+    if (!isDragging) return;
+    const btn = pickTargetBtn(e);
+    if (!btn) return;
+    const val = e.altKey ? '-' : paintVal;
+    applyToCell(btn, val);
+  });
+
+  window.addEventListener('mouseup', () => { isDragging = false; });
+
+  // クリック（通常時は何もしない／Ctrl/⌘クリックでサイクル）
+  shiftTable.addEventListener('click', (e) => {
+    const btn = e.target.closest('.cell-btn');
+    if (!btn) return;
+    if (e.ctrlKey || e.metaKey) {
+      // “サイクル”はここで実行（mousedownでは塗っていない）
+      doCycle(btn);
+      e.preventDefault();
+    }
+    // 通常クリックは mousedown で“塗り”済みなので何もしない
+  });
+
+  // タッチ操作（長押し不要。タッチ中はドラッグ塗り）
+  let touchPainting = false;
+  shiftTable.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    if (!touch) return;
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const btn = el?.closest?.('.cell-btn');
+    if (!btn) return;
+    touchPainting = true;
+    applyToCell(btn, paintVal);
+  }, {passive: true});
+
+  shiftTable.addEventListener('touchmove', (e) => {
+    if (!touchPainting) return;
+    const touch = e.touches[0];
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const btn = el?.closest?.('.cell-btn');
+    if (!btn) return;
+    applyToCell(btn, paintVal);
+  }, {passive: true});
+
+  window.addEventListener('touchend', () => { touchPainting = false; });
+  // ===== ペイント方式 ここまで =====
 </script>
 
 </body>

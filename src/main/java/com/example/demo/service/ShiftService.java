@@ -1,23 +1,32 @@
 package com.example.demo.service;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Collections;            // ★ 追加：min/max 用
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.example.demo.dto.UserProfileDto;
+import com.example.demo.form.ShiftGenerationForm;
 import com.example.demo.model.Shift;
+import com.example.demo.model.Shift.Status;
 import com.example.demo.repository.ShiftRepository;
+import com.example.demo.repository.UserProfileRepository;
 
 @Service
 public class ShiftService {
 
     private final ShiftRepository shiftRepository;
+    private final UserProfileRepository userProfileRepository;
 
-    public ShiftService(ShiftRepository shiftRepository) {
+    public ShiftService(ShiftRepository shiftRepository,
+                        UserProfileRepository userProfileRepository) {
         this.shiftRepository = shiftRepository;
+        this.userProfileRepository = userProfileRepository;
     }
 
     /**
@@ -30,8 +39,22 @@ public class ShiftService {
      * @return Map形式の勤務情報（セル表示用）
      */
     public Map<String, String> getShiftMap(List<UserProfileDto> users, List<LocalDate> dates, String department) {
-        // 表示対象全体の日付＋部署のシフト情報をまとめて取得
-        List<Shift> shifts = shiftRepository.findByDepartmentAndDateIn(department, dates);
+
+        // ★ ガード：dates が null/空なら即返す（IN () 問題の根絶 & 無駄クエリ抑止）
+        if (dates == null || dates.isEmpty()) {
+            System.out.println("[getShiftMap] dates is empty -> return empty map");
+            return Map.of();
+        }
+
+        // ★ ここがポイント：IN をやめて BETWEEN（両端含む）で取得する
+        //    dates がソート済みでない可能性に備えて min/max を取る
+        LocalDate start = Collections.min(dates); // 月初など
+        LocalDate end   = Collections.max(dates); // 月末など
+
+        // --- 表示対象全体の日付＋部署のシフト情報をまとめて取得 ---
+        // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
+        // 新）BETWEEN 版（両端含む）
+        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
 
         Map<String, String> map = new HashMap<>();
 
@@ -45,9 +68,106 @@ public class ShiftService {
         return map;
     }
 
-    // 必要であれば今後ここに：
-    // - シフト登録メソッド
-    // - 自動シフト生成ロジック呼び出し
-    // - 時間帯ごとの過不足数算出
-    // などを追加していく予定
-} 
+    // =====================================================
+    // ▼ 追加：シフトの保存・更新関連メソッド
+    // =====================================================
+
+    /**
+     * 画面の入力データを一括で保存。
+     * - status = DRAFT（一時保存）または CONFIRMED（確定）
+     * - 値が "-" または "" のセルは削除（=クリア扱い）
+     */
+    @Transactional
+    public void saveShifts(ShiftGenerationForm form, Status status) {
+        if (form == null || form.getShifts() == null) return;
+
+        final String department = form.getDepartment();
+        final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        for (Map.Entry<String, String> entry : form.getShifts().entrySet()) {
+            String key = entry.getKey();       // "userId_YYYY-MM-DD"
+            String value = entry.getValue() == null ? "" : entry.getValue().trim();
+
+            // --- キーを分解 ---
+            int underscore = key.indexOf('_');
+            if (underscore <= 0) continue;
+            Long userId;
+            LocalDate date;
+            try {
+                userId = Long.valueOf(key.substring(0, underscore));
+                date = LocalDate.parse(key.substring(underscore + 1), DF);
+            } catch (Exception e) {
+                continue; // フォーマット不正はスキップ
+            }
+
+            // --- クリア処理（"-" or 空文字） ---
+            if (value.isEmpty() || "-".equals(value)) {
+                shiftRepository.deleteByUser_IdAndDateAndDepartment(userId, date, department);
+                continue;
+            }
+
+            // --- Upsert処理 ---
+            var opt = shiftRepository.findByUser_IdAndDateAndDepartment(userId, date, department);
+            Shift shift = opt.orElseGet(Shift::new);
+
+            if (shift.getId() == null) {
+                var user = userProfileRepository.findById(userId).orElse(null);
+                if (user == null) continue;
+                shift.setUser(user);
+                shift.setDate(date);
+                shift.setDepartment(department);
+            }
+
+            shift.setShiftType(value); // "日","夜","明","休","有","臨(確)","臨(自)"
+            shift.setStatus(status);   // DRAFT or CONFIRMED
+
+            shiftRepository.save(shift);
+        }
+    }
+
+    /**
+     * 確定解除：指定範囲のシフトをすべて DRAFT に戻す。
+     */
+    @Transactional
+    public void unconfirmShifts(ShiftGenerationForm form) {
+        if (form == null || form.getShifts() == null) return;
+
+        final String department = form.getDepartment();
+        final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+        for (String key : form.getShifts().keySet()) {
+            int underscore = key.indexOf('_');
+            if (underscore <= 0) continue;
+            try {
+                Long userId = Long.valueOf(key.substring(0, underscore));
+                LocalDate date = LocalDate.parse(key.substring(underscore + 1), DF);
+
+                var opt = shiftRepository.findByUser_IdAndDateAndDepartment(userId, date, department);
+                if (opt.isPresent()) {
+                    Shift shift = opt.get();
+                    shift.setStatus(Status.DRAFT);
+                    shiftRepository.save(shift);
+                }
+            } catch (Exception e) {
+                continue;
+            }
+        }
+    }
+
+    // -----------------------------------------------------
+    // （参考）状態で絞りたい場合の BETWEEN 版サンプル（必要になったら有効化）
+    // public Map<String, String> getShiftMapByStatus(
+    //         List<UserProfileDto> users, List<LocalDate> dates, String department, Status status) {
+    //     if (dates == null || dates.isEmpty()) return Map.of();
+    //     LocalDate start = Collections.min(dates);
+    //     LocalDate end   = Collections.max(dates);
+    //     List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetweenAndStatus(department, start, end, status);
+    //     Map<String, String> map = new HashMap<>();
+    //     for (Shift shift : shifts) {
+    //         String key = shift.getUser().getId() + "_" + shift.getDate();
+    //         map.put(key, shift.getShiftType());
+    //     }
+    //     return map;
+    // }
+    // -----------------------------------------------------
+}

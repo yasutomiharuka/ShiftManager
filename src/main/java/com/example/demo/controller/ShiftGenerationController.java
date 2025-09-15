@@ -11,11 +11,8 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.demo.dto.UserProfileDto;
 import com.example.demo.form.ShiftGenerationForm;
@@ -25,7 +22,7 @@ import com.example.demo.service.UserProfileService;
 /**
  * シフト生成に関する画面コントローラ
  * GET: 画面表示
- * POST: 希望休保存、シフト生成処理など
+ * POST: 一時保存、シフト生成処理など
  */
 @Controller
 @RequestMapping("/shift")
@@ -48,7 +45,7 @@ public class ShiftGenerationController {
     @GetMapping("/generate")
     public String showGeneratePage(
             @RequestParam(required = false, defaultValue = "amami") String department,
-            @RequestParam(required = false) 
+            @RequestParam(required = false)
             @DateTimeFormat(pattern = "yyyy-MM") YearMonth month, // URLパラメータ ?month=2025-08 を受け取れる
             Model model) {
 
@@ -75,7 +72,7 @@ public class ShiftGenerationController {
                     "amami", "天美",
                     "main", "本社"
             );
-            
+
             // ★ 追加：テンプレで参照する shiftMap は必ず non-null に
             Map<String, String> shiftMap = new HashMap<>();
             // 既存シフトを表示したい場合は、必要になったらサービスを呼び出して上書きする
@@ -92,7 +89,7 @@ public class ShiftGenerationController {
                     departmentDisplayMap.getOrDefault(department, department));
             model.addAttribute("shiftMap", shiftMap); // shiftMap
             model.addAttribute("form", new ShiftGenerationForm());  // 入力フォーム用オブジェクト
-            
+
             // 一覧/日付が空の場合の可視化用フラグ（必ず boolean を渡す）
             boolean noUsers = (users == null || users.isEmpty());
             boolean noDates = (dates == null || dates.isEmpty());
@@ -118,49 +115,5 @@ public class ShiftGenerationController {
         }
 
         return "shift/generate"; // 表示するThymeleafテンプレート名
-    }
-
-    /**
-     * 希望休を保存する処理
-     * /shift/generate/request/save にPOSTされたとき呼ばれる
-     */
-    @PostMapping("/generate/request/save")
-    public String saveShiftRequests(@ModelAttribute("form") ShiftGenerationForm form,
-                                    RedirectAttributes redirectAttributes) {
-
-        System.out.println("▶ saveShiftRequests 開始");
-
-        try {
-            // --- 1. フォームの中身をログ出力 ---
-            String dept = form.getDepartment();
-            YearMonth targetMonth = form.getTargetMonth();
-            var requests = form.getShiftRequests();
-
-            System.out.println("▶ 部署: " + dept);
-            System.out.println("▶ 対象月: " + targetMonth);
-            System.out.println("▶ 希望休件数: " + (requests == null ? 0 : requests.size()));
-
-            // --- 2. サービスに保存を依頼 ---
-            if (requests != null && !requests.isEmpty()) {
-                shiftGenerationService.saveShiftRequests(requests);
-            }
-
-            // --- 3. 完了メッセージをFlashAttributeで次画面に渡す ---
-            redirectAttributes.addFlashAttribute("message", "希望休を保存しました");
-            System.out.println("▶ 希望休保存完了");
-
-        } catch (Exception e) {
-            System.out.println("❌ エラー発生: " + e.getMessage());
-            e.printStackTrace();
-            redirectAttributes.addFlashAttribute("error", "保存中にエラーが発生しました");
-        }
-
-        // --- 4. 保存後は同じ画面にリダイレクト（PRGパターン） ---
-        String monthParam = (form.getTargetMonth() != null)
-                ? form.getTargetMonth().toString()
-                : YearMonth.now().toString();
-
-        return "redirect:/shift/generate?department=" + form.getDepartment()
-                + "&month=" + monthParam;
     }
 }
