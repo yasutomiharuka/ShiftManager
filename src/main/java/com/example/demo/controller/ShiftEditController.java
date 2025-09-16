@@ -3,7 +3,7 @@ package com.example.demo.controller;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam; // ← 追加：mode 受け取り用
+import org.springframework.web.bind.annotation.RequestParam; // ← 追加：action 受け取り用
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.demo.form.ShiftGenerationForm;
@@ -23,7 +23,7 @@ import com.example.demo.service.ShiftService;
  * 保存処理が完了したら PRG パターンで再度 /shift/generate にリダイレクトする。
  *
  * ▼変更点
- * ・フロント側のボタンはすべて /api/shift/request/save にPOSTし、name="mode"の値で分岐
+ * ・フロント側のボタンはすべて /api/shift/request/save にPOSTし、name="action" の値で分岐
  * ・本クラスのルートも /api/shift/request に変更
  */
 @Controller
@@ -38,23 +38,23 @@ public class ShiftEditController {
 
     /**
      * 共通保存エンドポイント
-     * - mode=DRAFT      : 一時保存（下書き）
-     * - mode=CONFIRMED  : 確定保存
-     * - mode=UNCONFIRM  : 確定解除（確定→下書きに戻す）
+     * - action=DRAFT      : 一時保存（下書き）
+     * - action=CONFIRMED  : 確定保存
+     * - action=UNCONFIRM  : 確定解除（確定→下書きに戻す）
      *
      * 例）generate.html のボタン：
-     *  <button type="submit" formaction="/api/shift/request/save" name="mode" value="DRAFT">一時保存</button>
+     *  <button type="submit" formaction="/api/shift/request/save" name="action" value="DRAFT">一時保存</button>
      */
     @PostMapping("/save")
     public String save(ShiftGenerationForm form,
-                       @RequestParam(name = "mode", defaultValue = "CONFIRMED") String mode,
+                       @RequestParam(name = "action", defaultValue = "CONFIRMED") String action,
                        RedirectAttributes ra) {
 
-        // mode の大小文字・余白を吸収
-        final String m = mode == null ? "CONFIRMED" : mode.trim().toUpperCase();
+        // action の大小文字・余白を吸収
+        final String normalizedAction = action == null ? "CONFIRMED" : action.trim().toUpperCase();
 
         String notice;
-        switch (m) {
+        switch (normalizedAction) {
         case "DRAFT":
             // ▼ 下書き保存
             shiftService.saveShifts(form, Shift.Status.DRAFT);
@@ -74,7 +74,7 @@ public class ShiftEditController {
             break;
 
         default:
-            // ▼ 想定外モードは CONFIRMED と同等で扱う
+            // ▼ 想定外アクションは CONFIRMED と同等で扱う
             shiftService.saveShifts(form, Shift.Status.CONFIRMED);
             notice = "シフトを確定しました。";
             break;

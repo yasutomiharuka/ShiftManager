@@ -79,7 +79,7 @@
   <a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集</a>
 </form>
 
-<!-- ▼ モード切替（フロントのみ。POST時は hiddenのmodeで受け取れる） -->
+<!-- ▼ モード切替（フロントのみ。POST時は hidden の uiMode で受け取れる） -->
 <div class="panel">
   <strong>入力モード</strong>：
   <button type="button" onclick="setMode('normal')">通常</button>
@@ -124,7 +124,7 @@
   <!-- 画面状態の保持 -->
   <input type="hidden" name="department" th:value="${department != null ? department : ''}">
   <input type="hidden" name="month"      th:value="${month != null ? month : ''}">
-  <input type="hidden" id="mode" name="mode" value="normal">
+  <input type="hidden" id="uiMode" name="uiMode" value="normal">
   
   <!-- shiftMap が空なら初期状態の案内を表示 -->
   <div class="panel" style="background:#f1f8e9;"
@@ -234,7 +234,7 @@
     <button type="submit"
             th:formaction="@{/api/shift/request/save}"
             formmethod="post"
-            name="mode" value="DRAFT">
+            name="action" value="DRAFT">
       一時保存
     </button>
 
@@ -242,7 +242,7 @@
     <button type="submit"
             th:formaction="@{/api/shift/request/save}"
             formmethod="post"
-            name="mode" value="CONFIRMED">
+            name="action" value="CONFIRMED">
       確定（生成に反映）
     </button>
 
@@ -250,7 +250,7 @@
     <button type="submit"
             th:formaction="@{/api/shift/request/save}"
             formmethod="post"
-            name="mode" value="UNCONFIRM">
+            name="action" value="UNCONFIRM">
       確定解除
     </button>
 
@@ -283,16 +283,16 @@
   const cycleTemp    = ['臨(確)','-'];
 
   function currentCycle(){
-    // hidden の mode を参照して、サイクルを切り替える
-    const m = document.getElementById('mode').value;
+    // hidden の uiMode を参照して、サイクルを切り替える
+    const m = document.getElementById('uiMode').value;
     if(m === 'request') return cycleRequest;
     if(m === 'temp')    return cycleTemp;
     return cycleNormal;
   }
 
   function setMode(m){
-    // 画面表示のみ切替（POST時は hidden の mode でサーバへ渡る）
-    document.getElementById('mode').value = m;
+    // 画面表示のみ切替（POST時は hidden の uiMode でサーバへ渡る）
+    document.getElementById('uiMode').value = m;
   }
 
   // ▼ 共通：セルへ値を適用（ペイント／サイクルの両方から呼び出す）
