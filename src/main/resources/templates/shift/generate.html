@@ -167,23 +167,25 @@
 
         <!-- セル：shiftMap が null でも落ちないように th:with で val を取得し三項でガード -->
         <td th:each="d : ${dates != null ? dates : {}}"
-            th:with="key=${user.id + '_' + d}, val=${shiftMap != null ? shiftMap[key] : null}"
-            th:classappend="${val != null ? val : ''}">
+            th:with="dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+                     key=${user.id + '_' + dateKey},
+                     val=${shiftMap != null ? #strings.trim(shiftMap[key]) : null}"
+            th:classappend="${!#strings.isEmpty(val) ? val : ''}">
           
           <!-- ▼ 追加：属性保持（onclickは削除） -->
           <button
             type="button"
             class="cell-btn"
-            th:id="${'btn_' + user.id + '_' + d}"
+            th:id="${'btn_' + user.id + '_' + dateKey}"
             th:data-user-id="${user.id}"
-            th:data-date="${d}"
-            th:text="${val != null ? val : '-'}">
+            th:data-date="${dateKey}"
+            th:text="${!#strings.isEmpty(val) ? val : '-'}">
           </button>
 
           <!-- 送信用 hidden（nameは userId_date で一意）。null の場合は空文字で送る -->
           <input type="hidden"
-                 th:id="${'val_' + user.id + '_' + d}"
-                 th:name="${'shifts[' + user.id + '_' + d + ']'}"
+                 th:id="${'val_' + user.id + '_' + dateKey}"
+                 th:name="|shifts['${user.id}_${dateKey}']|"
                  th:value="${val != null ? val : ''}">
         </td>
       </tr>
