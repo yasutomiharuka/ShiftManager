@@ -4,6 +4,8 @@ import java.time.YearMonth;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.format.annotation.DateTimeFormat;
+
 /**
  * シフト生成画面から送信されるフォームオブジェクト。
  * 希望休・臨時職員・シフト入力をまとめて受け取る。
@@ -17,6 +19,7 @@ public class ShiftGenerationForm {
     private List<TemporaryAssignmentForm> temporaryAssignments;
 
     // シフト生成対象の月
+    @DateTimeFormat(pattern = "yyyy-MM")
     private YearMonth targetMonth;
 
     // 所属部署（例: "amami", "main"）
