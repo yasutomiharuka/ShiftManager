@@ -62,8 +62,15 @@ public class ShiftService {
         for (Shift shift : shifts) {
             Long userId = shift.getUser().getId();
             LocalDate date = shift.getDate();
+            String shiftType = shift.getShiftType();
+
+            if (!StringUtils.hasText(shiftType)) {
+                // 空文字や null は画面に表示しない（既存の値を上書きしない）
+                continue;
+            }
+
             String key = userId + "_" + date;
-            map.put(key, shift.getShiftType());
+            map.put(key, shiftType.trim());
         }
 
         return map;

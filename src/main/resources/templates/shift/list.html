@@ -46,9 +46,11 @@
         <tr th:each="user : ${users}">
             <td th:text="${user.lastName + ' ' + user.firstName}"></td>
             <td th:each="d : ${dates}"
-                th:with="key=${user.id + '_' + d}"
-                th:text="${shiftMap[key]}"
-                th:class="${shiftMap[key]}" />
+                th:with="dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+                         key=${user.id + '_' + dateKey},
+                         val=${shiftMap != null ? #strings.trim(shiftMap[key]) : null}"
+                th:text="${!#strings.isEmpty(val) ? val : '-'}"
+                th:classappend="${!#strings.isEmpty(val) ? val : ''}"></td>
         </tr>
     </tbody>
 </table>
