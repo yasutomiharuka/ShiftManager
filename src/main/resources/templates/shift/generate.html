@@ -24,6 +24,15 @@
     .legend { display: flex; gap: 8px; flex-wrap: wrap; }
     .legend span { padding: 2px 6px; border: 1px solid #ccc; border-radius: 4px; }
 
+    .notice {
+      margin: 12px 0;
+      padding: 10px 14px;
+      border: 1px solid #1976d2;
+      background-color: #e3f2fd;
+      color: #0d47a1;
+      border-radius: 6px;
+    }
+
     /* ▼ 追加：上部パレット（ペイント方式） */
     .palette { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .palette .swatch { padding: 4px 8px; border: 1px solid #ccc; border-radius: 6px; cursor: pointer; user-select: none; }
@@ -32,6 +41,8 @@
   </style>
 </head>
 <body>
+
+  <div class="notice" th:if="${notice}" th:text="${notice}"></div>
 
 <!-- ▼ タイトル：selectedDepartmentName / month はnull時のフォールバックを用意 -->
 <h2 th:text="${(selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択'))} + '／' + (month != null ? month : '未指定') + ' のシフト生成'">
