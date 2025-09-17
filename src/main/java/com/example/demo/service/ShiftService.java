@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import com.example.demo.dto.UserProfileDto;
 import com.example.demo.form.ShiftGenerationForm;
@@ -81,7 +82,11 @@ public class ShiftService {
     public void saveShifts(ShiftGenerationForm form, Status status) {
         if (form == null || form.getShifts() == null) return;
 
-        final String department = form.getDepartment();
+        if (!StringUtils.hasText(form.getDepartment())) {
+            throw new IllegalArgumentException("Department must not be null or empty when saving shifts");
+        }
+
+        final String department = form.getDepartment().trim();
         final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
         for (Map.Entry<String, String> entry : form.getShifts().entrySet()) {
@@ -132,7 +137,11 @@ public class ShiftService {
     public void unconfirmShifts(ShiftGenerationForm form) {
         if (form == null || form.getShifts() == null) return;
 
-        final String department = form.getDepartment();
+        if (!StringUtils.hasText(form.getDepartment())) {
+            throw new IllegalArgumentException("Department must not be null or empty when unconfirming shifts");
+        }
+
+        final String department = form.getDepartment().trim();
         final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
         for (String key : form.getShifts().keySet()) {
