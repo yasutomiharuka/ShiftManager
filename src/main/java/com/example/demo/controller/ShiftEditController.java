@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import org.springframework.stereotype.Controller;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam; // ← 追加：action 受け取り用
@@ -48,7 +49,23 @@ public class ShiftEditController {
     @PostMapping("/save")
     public String save(ShiftGenerationForm form,
                        @RequestParam(name = "action", defaultValue = "CONFIRMED") String action,
+                       @RequestParam(name = "department", required = false) String departmentParam,
                        RedirectAttributes ra) {
+
+        // 部署の取得（フォーム優先／パラメータを保険に）
+        String resolvedDepartment = null;
+        if (form != null && StringUtils.hasText(form.getDepartment())) {
+            resolvedDepartment = form.getDepartment().trim();
+        } else if (StringUtils.hasText(departmentParam)) {
+            resolvedDepartment = departmentParam.trim();
+        }
+
+        if (!StringUtils.hasText(resolvedDepartment)) {
+            ra.addFlashAttribute("notice", "部署が選択されていません。部署を選択してから保存してください。");
+            return redirectToGenerate(form, ra);
+        }
+
+        form.setDepartment(resolvedDepartment);
 
         // action の大小文字・余白を吸収
         final String normalizedAction = action == null ? "CONFIRMED" : action.trim().toUpperCase();
@@ -84,7 +101,7 @@ public class ShiftEditController {
         ra.addFlashAttribute("notice", notice);
 
         // PRG：保存後は生成画面へ戻る
-        return redirectToGenerate(form);
+        return redirectToGenerate(form, ra);
     }
 
     /* =========================
@@ -138,10 +155,15 @@ public class ShiftEditController {
     */
 
     // 共通：保存後は generate 画面にリダイレクト
-    private String redirectToGenerate(ShiftGenerationForm form) {
-        // ▼ department, targetMonth はフォームの hidden から渡ってくる想定
-        String dept = (form.getDepartment() != null) ? form.getDepartment() : "amami";
-        String month = (form.getTargetMonth() != null) ? form.getTargetMonth().toString() : "";
-        return "redirect:/shift/generate?department=" + dept + "&month=" + month;
+    private String redirectToGenerate(ShiftGenerationForm form, RedirectAttributes ra) {
+        if (form != null) {
+            if (StringUtils.hasText(form.getDepartment())) {
+                ra.addAttribute("department", form.getDepartment());
+            }
+            if (form.getTargetMonth() != null) {
+                ra.addAttribute("month", form.getTargetMonth().toString());
+            }
+        }
+        return "redirect:/shift/generate";
     }
 }
