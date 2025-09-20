@@ -49,7 +49,7 @@ public class ShiftGenerationController {
     public String showGeneratePage(
             @RequestParam(required = false, defaultValue = "amami") String department,
             @RequestParam(required = false)
-            @DateTimeFormat(pattern = "yyyy-MM") YearMonth month, // URLパラメータ ?month=2025-08 を受け取れる
+            @DateTimeFormat(pattern = "yyyy-MM") YearMonth month,
             Model model) {
 
         System.out.println("▶ showGeneratePage 開始");
@@ -80,24 +80,22 @@ public class ShiftGenerationController {
             );
 
             // --- 6. Thymeleafに渡す値をmodelにセット ---
-            model.addAttribute("users", users);                     // 表示対象のユーザー
-            model.addAttribute("dates", dates);                     // 日付リスト
-            model.addAttribute("department", department);           // 部署コード
-            model.addAttribute("month", targetMonth);               // 対象月
-            model.addAttribute("departments", departmentDisplayMap.keySet()); // セレクトボックス用
-            model.addAttribute("departmentNames", departmentDisplayMap);      // 表示名用
+            model.addAttribute("users", users);
+            model.addAttribute("dates", dates);
+            model.addAttribute("department", department);
+            model.addAttribute("month", targetMonth);
+            model.addAttribute("departments", departmentDisplayMap.keySet());
+            model.addAttribute("departmentNames", departmentDisplayMap);
             model.addAttribute("selectedDepartmentName",
                     departmentDisplayMap.getOrDefault(department, department));
-            model.addAttribute("shiftMap", shiftMap); // shiftMap
-            model.addAttribute("form", new ShiftGenerationForm());  // 入力フォーム用オブジェクト
+            model.addAttribute("shiftMap", shiftMap);
+            model.addAttribute("form", new ShiftGenerationForm());
 
-            // 一覧/日付が空の場合の可視化用フラグ（必ず boolean を渡す）
-            boolean noUsers = (users == null || users.isEmpty());
-            boolean noDates = (dates == null || dates.isEmpty());
-            model.addAttribute("noUsers", noUsers);
-            model.addAttribute("noDates", noDates);
+            // 可視化用フラグ
+            model.addAttribute("noUsers", users == null || users.isEmpty());
+            model.addAttribute("noDates", dates == null || dates.isEmpty());
 
-            // form が null にならないように保険
+            // 保険
             if (model.getAttribute("form") == null) {
                 model.addAttribute("form", new ShiftGenerationForm());
             }
@@ -105,13 +103,12 @@ public class ShiftGenerationController {
             System.out.println("▶ モデルへのデータ格納完了");
 
         } catch (Exception e) {
-            // 例外発生時はエラーメッセージを表示
             System.out.println("❌ エラー発生: " + e.getMessage());
             e.printStackTrace();
             model.addAttribute("errorMessage", "シフト生成画面の表示中にエラーが発生しました");
-            return "error"; // error.html を用意していない場合は list/generate にリダイレクトでもOK
+            return "error";
         }
 
-        return "shift/generate"; // 表示するThymeleafテンプレート名
+        return "shift/generate";
     }
 }

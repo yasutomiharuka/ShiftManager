@@ -185,7 +185,7 @@
           <!-- 送信用 hidden（nameは userId_date で一意）。null の場合は空文字で送る -->
           <input type="hidden"
                  th:id="${'val_' + user.id + '_' + dateKey}"
-                 th:name="|shifts['${user.id}_${dateKey}']|"
+                 th:name="${'shifts[' + user.id + '_' + dateKey + ']'}"
                  th:value="${val != null ? val : ''}">
         </td>
       </tr>
