@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;            // ★ 追加：min/max 用
 import java.util.HashMap;
@@ -77,9 +78,23 @@ public class ShiftService {
             merged.put(key, shift);
         }        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
 
-        Map<String, String> map = new HashMap<>();
+        // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
+        //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
+        Map<String, Shift> latestByCell = new HashMap<>();
+        for (Shift shift : shifts) {
+            if (shift == null || shift.getUser() == null) {
+                continue;
+            }
 
-        for (Shift shift : merged.values()) {
+            String key = shift.getUser().getId() + "_" + shift.getDate();
+            Shift current = latestByCell.get(key);
+            if (current == null || isPreferred(shift, current)) {
+                latestByCell.put(key, shift);
+            }
+        }
+
+        Map<String, String> map = new HashMap<>(
+        for (Shift shift : latestByCell.values()) {
             Long userId = shift.getUser().getId();
             LocalDate date = shift.getDate();
             String shiftType = shift.getShiftType();
@@ -94,6 +109,43 @@ public class ShiftService {
         }
 
         return map;
+    }
+
+    /**
+     * 2つのシフトのうち、画面表示として優先すべき方を判定する。
+     * 優先順位:
+     *  1. Status が DRAFT の方を優先
+     *  2. Status が同じ場合は updatedAt が新しい方を優先
+     */
+    private boolean isPreferred(Shift candidate, Shift current) {
+        Status candidateStatus = candidate.getStatus();
+        Status currentStatus = current.getStatus();
+
+        if (candidateStatus == Status.DRAFT && currentStatus != Status.DRAFT) {
+            return true;
+        }
+        if (candidateStatus != Status.DRAFT && currentStatus == Status.DRAFT) {
+            return false;
+        }
+
+        if (candidateStatus == null && currentStatus != null) {
+            return false;
+        }
+        if (candidateStatus != null && currentStatus == null) {
+            return true;
+        }
+
+        LocalDateTime candidateUpdated = candidate.getUpdatedAt();
+        LocalDateTime currentUpdated = current.getUpdatedAt();
+
+        if (candidateUpdated == null) {
+            return false;
+        }
+        if (currentUpdated == null) {
+            return true;
+        }
+
+        return candidateUpdated.isAfter(currentUpdated);
     }
 
     // =====================================================
