@@ -57,32 +57,17 @@ public class ShiftService {
         // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
         // 新）BETWEEN 版（両端含む）
         //
-        // 2024-XX 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
+        // 2024 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
         // 原因は、表示側で CONFIRMED のみを拾う実装に依存していたため、
         // DRAFT で保存されたレコードが無視されてしまっていたこと。
-        // ここでは DRAFT → CONFIRMED の順にマージして map に積むことで、
-        // 一時保存直後でもセルに値が反映されるようにする。
-        List<Shift> shiftsDraft = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
-                department, start, end, Status.DRAFT);
-        List<Shift> shiftsConfirmed = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
-                department, start, end, Status.CONFIRMED);
-
-        // DRAFT を優先的に表示し、CONFIRMED は上書き（確定の方が優先度が高い想定）
-        Map<String, Shift> merged = new HashMap<>();
-        for (Shift shift : shiftsDraft) {
-            String key = shift.getUser().getId() + "_" + shift.getDate();
-            merged.put(key, shift);
-        }
-        for (Shift shift : shiftsConfirmed) {
-            String key = shift.getUser().getId() + "_" + shift.getDate();
-            merged.put(key, shift);
-        }        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
+        // ここではステータスを問わず取得した上で、優先ルールに従って 1 セル 1 件に正規化する。
+        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
 
         // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
         //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
         Map<String, Shift> latestByCell = new HashMap<>();
         for (Shift shift : shifts) {
-            if (shift == null || shift.getUser() == null) {
+            if (shift == null || shift.getUser() == null || shift.getDate() == null) {
                 continue;
             }
 
@@ -93,19 +78,20 @@ public class ShiftService {
             }
         }
 
-        Map<String, String> map = new HashMap<>(
-        for (Shift shift : latestByCell.values()) {
-            Long userId = shift.getUser().getId();
-            LocalDate date = shift.getDate();
-            String shiftType = shift.getShiftType();
+        Map<String, String> map = new HashMap<>();
+        for (Map.Entry<String, Shift> entry : latestByCell.entrySet()) {
+            Shift shift = entry.getValue();
+            if (shift == null) {
+                continue;
+            }
 
+            String shiftType = shift.getShiftType();
             if (!StringUtils.hasText(shiftType)) {
                 // 空文字や null は画面に表示しない（既存の値を上書きしない）
                 continue;
             }
 
-            String key = userId + "_" + date;
-            map.put(key, shiftType.trim());
+            map.put(entry.getKey(), shiftType.trim());
         }
 
         return map;
