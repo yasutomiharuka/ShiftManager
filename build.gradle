@@ -7,22 +7,9 @@ plugins {
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
-    }
-}
-
-tasks.withType(Test).configureEach {
-    javaLauncher = javaToolchains.launcherFor {
-        languageVersion = JavaLanguageVersion.of(17) 
-    }
-}
-
 tasks.withType(JavaCompile).configureEach {
-    sourceCompatibility = '17'
-    targetCompatibility = '17'
     options.encoding = 'UTF-8'
+    options.release = 17
 }
 
 
@@ -33,26 +20,25 @@ configurations {
 }
 
 repositories {
-	maven { url 'https://maven-central.storage-download.googleapis.com/maven2' } // Google mirror
-	mavenCentral()
+        mavenCentral()
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-security'
-	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
-	implementation 'org.springframework.boot:spring-boot-starter-validation'
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	compileOnly 'org.projectlombok:lombok'
-	developmentOnly 'org.springframework.boot:spring-boot-devtools'
-	runtimeOnly 'org.postgresql:postgresql'
-	annotationProcessor 'org.projectlombok:lombok'
-	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.security:spring-security-test'
-	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-	// H2 データベース（テスト用）
-    testImplementation 'com.h2database:h2'
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+        implementation 'org.springframework.boot:spring-boot-starter-security:3.3.5'
+        implementation 'org.springframework.boot:spring-boot-starter-thymeleaf:3.3.5'
+        implementation 'org.springframework.boot:spring-boot-starter-validation:3.3.5'
+        implementation 'org.springframework.boot:spring-boot-starter-web:3.3.5'
+        implementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.3.5'
+        compileOnly 'org.projectlombok:lombok:1.18.34'
+        developmentOnly 'org.springframework.boot:spring-boot-devtools:3.3.5'
+        runtimeOnly 'org.postgresql:postgresql:42.7.4'
+        annotationProcessor 'org.projectlombok:lombok:1.18.34'
+        testImplementation 'org.springframework.boot:spring-boot-starter-test:3.3.5'
+        testImplementation 'org.springframework.security:spring-security-test:6.3.4'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+        // H2 データベース（テスト用）
+    testImplementation 'com.h2database:h2:2.3.232'
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor:3.3.5'
 }
 
 sourceSets {
