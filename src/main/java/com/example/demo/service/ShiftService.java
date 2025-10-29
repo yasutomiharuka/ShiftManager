@@ -5,8 +5,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;            // ★ 追加：min/max 用
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -63,6 +66,12 @@ public class ShiftService {
         // ここではステータスを問わず取得した上で、優先ルールに従って 1 セル 1 件に正規化する。
         List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
 
+        Set<Long> targetUserIds = users == null ? Set.of() : users.stream()
+                .map(UserProfileDto::getId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+        Set<LocalDate> targetDates = new HashSet<>(dates);
+
         // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
         //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
         Map<String, Shift> latestByCell = new HashMap<>();
@@ -71,7 +80,17 @@ public class ShiftService {
                 continue;
             }
 
-            String key = shift.getUser().getId() + "_" + shift.getDate();
+            Long userId = shift.getUser().getId();
+            LocalDate date = shift.getDate();
+
+            if (!targetUserIds.isEmpty() && (userId == null || !targetUserIds.contains(userId))) {
+                continue;
+            }
+            if (!targetDates.contains(date)) {
+                continue;
+            }
+
+            String key = userId + "_" + date;
             Shift current = latestByCell.get(key);
             if (current == null || isPreferred(shift, current)) {
                 latestByCell.put(key, shift);
