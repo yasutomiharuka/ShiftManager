@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;            // ★ 追加：min/max 用
 import java.util.HashMap;
@@ -56,49 +57,95 @@ public class ShiftService {
         // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
         // 新）BETWEEN 版（両端含む）
         //
-        // 2024 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
+        // 2024-XX 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
         // 原因は、表示側で CONFIRMED のみを拾う実装に依存していたため、
         // DRAFT で保存されたレコードが無視されてしまっていたこと。
-        // ここではステータスを問わず取得した上で、下記ルールで 1 セル 1 件に正規化する。
-        //   1) まず CONFIRMED（確定済み）をマップへ格納
-        //   2) 続いて DRAFT（下書き）で上書きし、画面では最新の下書きを優先表示
-        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
+        // ここでは DRAFT → CONFIRMED の順にマージして map に積むことで、
+        // 一時保存直後でもセルに値が反映されるようにする。
+        List<Shift> shiftsDraft = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
+                department, start, end, Status.DRAFT);
+        List<Shift> shiftsConfirmed = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
+                department, start, end, Status.CONFIRMED);
 
-        Map<String, String> map = new HashMap<>();
+        // DRAFT を優先的に表示し、CONFIRMED は上書き（確定の方が優先度が高い想定）
+        Map<String, Shift> merged = new HashMap<>();
+        for (Shift shift : shiftsDraft) {
+            String key = shift.getUser().getId() + "_" + shift.getDate();
+            merged.put(key, shift);
+        }
+        for (Shift shift : shiftsConfirmed) {
+            String key = shift.getUser().getId() + "_" + shift.getDate();
+            merged.put(key, shift);
+        }        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
 
-        // ▼ まずは確定済み(CONFIRMED)を反映
+        // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
+        //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
+        Map<String, Shift> latestByCell = new HashMap<>();
         for (Shift shift : shifts) {
-            if (!isTargetShift(shift, Status.CONFIRMED)) {
+            if (shift == null || shift.getUser() == null) {
                 continue;
             }
-            putIfPresent(map, shift);
+
+            String key = shift.getUser().getId() + "_" + shift.getDate();
+            Shift current = latestByCell.get(key);
+            if (current == null || isPreferred(shift, current)) {
+                latestByCell.put(key, shift);
+            }
         }
 
-        // ▼ 次に一時保存(DRAFT)で上書き（下書きを画面に優先表示するため）
-        for (Shift shift : shifts) {
-            if (!isTargetShift(shift, Status.DRAFT)) {
+        Map<String, String> map = new HashMap<>(
+        for (Shift shift : latestByCell.values()) {
+            Long userId = shift.getUser().getId();
+            LocalDate date = shift.getDate();
+            String shiftType = shift.getShiftType();
+
+            if (!StringUtils.hasText(shiftType)) {
+                // 空文字や null は画面に表示しない（既存の値を上書きしない）
                 continue;
             }
-            putIfPresent(map, shift);
+
+            String key = userId + "_" + date;
+            map.put(key, shiftType.trim());
         }
 
         return map;
     }
 
-    private boolean isTargetShift(Shift shift, Status status) {
-        return shift != null
-                && shift.getUser() != null
-                && shift.getDate() != null
-                && shift.getStatus() == status;
-    }
+    /**
+     * 2つのシフトのうち、画面表示として優先すべき方を判定する。
+     * 優先順位:
+     *  1. Status が DRAFT の方を優先
+     *  2. Status が同じ場合は updatedAt が新しい方を優先
+     */
+    private boolean isPreferred(Shift candidate, Shift current) {
+        Status candidateStatus = candidate.getStatus();
+        Status currentStatus = current.getStatus();
 
-    private void putIfPresent(Map<String, String> map, Shift shift) {
-        String shiftType = shift.getShiftType();
-        if (!StringUtils.hasText(shiftType)) {
-            return;
+        if (candidateStatus == Status.DRAFT && currentStatus != Status.DRAFT) {
+            return true;
         }
-        String key = shift.getUser().getId() + "_" + shift.getDate();
-        map.put(key, shiftType.trim());
+        if (candidateStatus != Status.DRAFT && currentStatus == Status.DRAFT) {
+            return false;
+        }
+
+        if (candidateStatus == null && currentStatus != null) {
+            return false;
+        }
+        if (candidateStatus != null && currentStatus == null) {
+            return true;
+        }
+
+        LocalDateTime candidateUpdated = candidate.getUpdatedAt();
+        LocalDateTime currentUpdated = current.getUpdatedAt();
+
+        if (candidateUpdated == null) {
+            return false;
+        }
+        if (currentUpdated == null) {
+            return true;
+        }
+
+        return candidateUpdated.isAfter(currentUpdated);
     }
 
     // =====================================================
