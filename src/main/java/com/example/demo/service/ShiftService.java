@@ -2,10 +2,16 @@ package com.example.demo.service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;            // ★ 追加：min/max 用
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+<<<<<<< HEAD
+=======
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+>>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,17 +47,15 @@ public class ShiftService {
      */
     public Map<String, String> getShiftMap(List<UserProfileDto> users, List<LocalDate> dates, String department) {
 
-        // ★ ガード：dates が null/空なら即返す（IN () 問題の根絶 & 無駄クエリ抑止）
         if (dates == null || dates.isEmpty()) {
-            System.out.println("[getShiftMap] dates is empty -> return empty map");
-            return Map.of();
+            return Collections.emptyMap();
         }
 
-        // ★ ここがポイント：IN をやめて BETWEEN（両端含む）で取得する
-        //    dates がソート済みでない可能性に備えて min/max を取る
-        LocalDate start = Collections.min(dates); // 月初など
-        LocalDate end   = Collections.max(dates); // 月末など
+        if (users == null || users.stream().allMatch(Objects::isNull)) {
+            return Collections.emptyMap();
+        }
 
+<<<<<<< HEAD
         // --- 表示対象全体の日付＋部署のシフト情報をまとめて取得 ---
         // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
         // 新）BETWEEN 版（両端含む）
@@ -65,12 +69,60 @@ public class ShiftService {
                 department, start, end, Status.DRAFT);
         List<Shift> shiftsConfirmed = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
                 department, start, end, Status.CONFIRMED);
+=======
+        List<LocalDate> normalizedDates = dates.stream()
+                .filter(Objects::nonNull)
+                .sorted()
+                .collect(Collectors.toList());
 
+        if (normalizedDates.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        LocalDate start = normalizedDates.get(0);
+        LocalDate end = normalizedDates.get(normalizedDates.size() - 1);
+
+        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
+>>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
+
+<<<<<<< HEAD
         // DRAFT を優先的に表示し、CONFIRMED は上書き（確定の方が優先度が高い想定）
         Map<String, Shift> merged = new HashMap<>();
         for (Shift shift : shiftsDraft) {
             String key = shift.getUser().getId() + "_" + shift.getDate();
             merged.put(key, shift);
+=======
+        Set<Long> targetUserIds = users == null ? Set.of() : users.stream()
+                .filter(Objects::nonNull)
+                .map(UserProfileDto::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<LocalDate> targetDates = new HashSet<>(normalizedDates);
+
+        // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
+        //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
+        Map<String, Shift> latestByCell = new HashMap<>();
+        for (Shift shift : shifts) {
+            if (shift == null || shift.getUser() == null || shift.getDate() == null) {
+                continue;
+            }
+
+            Long userId = shift.getUser().getId();
+            LocalDate date = shift.getDate();
+
+            if (!targetUserIds.isEmpty() && (userId == null || !targetUserIds.contains(userId))) {
+                continue;
+            }
+            if (!targetDates.contains(date)) {
+                continue;
+            }
+
+            String key = userId + "_" + date;
+            Shift current = latestByCell.get(key);
+            if (current == null || isPreferred(shift, current)) {
+                latestByCell.put(key, shift);
+            }
+>>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
         }
         for (Shift shift : shiftsConfirmed) {
             String key = shift.getUser().getId() + "_" + shift.getDate();

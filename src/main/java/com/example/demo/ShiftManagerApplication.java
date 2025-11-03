@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 @SpringBootApplication(scanBasePackages = "com.example.demo")
 public class ShiftManagerApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(ShiftManagerApplication.class, args);
-	}
+        public static void main(String[] args) {
+                SpringApplication.run(ShiftManagerApplication.class, args);
+        }
 
 }
