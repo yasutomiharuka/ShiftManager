@@ -3,11 +3,12 @@ package com.example.demo.service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Collections;            // ★ 追加：min/max 用
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -45,35 +46,37 @@ public class ShiftService {
      */
     public Map<String, String> getShiftMap(List<UserProfileDto> users, List<LocalDate> dates, String department) {
 
-        // ★ ガード：dates が null/空なら即返す（IN () 問題の根絶 & 無駄クエリ抑止）
         if (dates == null || dates.isEmpty()) {
-            System.out.println("[getShiftMap] dates is empty -> return empty map");
-            return Map.of();
+            return Collections.emptyMap();
         }
 
-        // ★ ここがポイント：IN をやめて BETWEEN（両端含む）で取得する
-        //    dates がソート済みでない可能性に備えて min/max を取る
-        LocalDate start = Collections.min(dates); // 月初など
-        LocalDate end   = Collections.max(dates); // 月末など
+        if (users == null || users.stream().allMatch(Objects::isNull)) {
+            return Collections.emptyMap();
+        }
 
-        // --- 表示対象全体の日付＋部署のシフト情報をまとめて取得 ---
-        // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
-        // 新）BETWEEN 版（両端含む）
-        //
-        // 2024 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
-        // 原因は、表示側で CONFIRMED のみを拾う実装に依存していたため、
-        // DRAFT で保存されたレコードが無視されてしまっていたこと。
-        // ここではステータスを問わず取得した上で、優先ルールに従って 1 セル 1 件に正規化する。
+        List<LocalDate> normalizedDates = dates.stream()
+                .filter(Objects::nonNull)
+                .sorted()
+                .collect(Collectors.toList());
+
+        if (normalizedDates.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        LocalDate start = normalizedDates.get(0);
+        LocalDate end = normalizedDates.get(normalizedDates.size() - 1);
+
         List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
 
         Set<Long> targetUserIds = users == null ? Set.of() : users.stream()
+                .filter(Objects::nonNull)
                 .map(UserProfileDto::getId)
-                .filter(id -> id != null)
+                .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
-        Set<LocalDate> targetDates = new HashSet<>(dates);
+        Set<LocalDate> targetDates = new HashSet<>(normalizedDates);
 
         // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
-        //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
+        //    最新の状態（優先度: CONFIRMED > DRAFT、同一優先度では更新日時が新しい方）を採用する。
         Map<String, Shift> latestByCell = new HashMap<>();
         for (Shift shift : shifts) {
             if (shift == null || shift.getUser() == null || shift.getDate() == null) {
@@ -119,25 +122,19 @@ public class ShiftService {
     /**
      * 2つのシフトのうち、画面表示として優先すべき方を判定する。
      * 優先順位:
-     *  1. Status が DRAFT の方を優先
-     *  2. Status が同じ場合は updatedAt が新しい方を優先
+     *  1. Status が CONFIRMED の方を優先
+     *  2. Status が DRAFT の方を次点で優先
+     *  3. Status が同じ場合は updatedAt が新しい方を優先
      */
     private boolean isPreferred(Shift candidate, Shift current) {
         Status candidateStatus = candidate.getStatus();
         Status currentStatus = current.getStatus();
 
-        if (candidateStatus == Status.DRAFT && currentStatus != Status.DRAFT) {
-            return true;
-        }
-        if (candidateStatus != Status.DRAFT && currentStatus == Status.DRAFT) {
-            return false;
-        }
+        int candidatePriority = statusPriority(candidateStatus);
+        int currentPriority = statusPriority(currentStatus);
 
-        if (candidateStatus == null && currentStatus != null) {
-            return false;
-        }
-        if (candidateStatus != null && currentStatus == null) {
-            return true;
+        if (candidatePriority != currentPriority) {
+            return candidatePriority > currentPriority;
         }
 
         LocalDateTime candidateUpdated = candidate.getUpdatedAt();
@@ -151,6 +148,16 @@ public class ShiftService {
         }
 
         return candidateUpdated.isAfter(currentUpdated);
+    }
+
+    private int statusPriority(Status status) {
+        if (status == Status.CONFIRMED) {
+            return 2;
+        }
+        if (status == Status.DRAFT) {
+            return 1;
+        }
+        return 0;
     }
 
     // =====================================================
