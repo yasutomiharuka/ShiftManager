@@ -1,7 +1,7 @@
 plugins {
-	id 'java'
-	id 'org.springframework.boot' version '3.3.5'
-	id 'io.spring.dependency-management' version '1.1.6'
+        id 'java'
+        id 'org.springframework.boot' version '3.3.5'
+        id 'io.spring.dependency-management' version '1.1.6'
 }
 
 group = 'com.example'
@@ -14,9 +14,9 @@ tasks.withType(JavaCompile).configureEach {
 
 
 configurations {
-	compileOnly {
-		extendsFrom annotationProcessor
-	}
+        compileOnly {
+                extendsFrom annotationProcessor
+        }
 }
 
 repositories {
@@ -37,8 +37,8 @@ dependencies {
         testImplementation 'org.springframework.security:spring-security-test:6.3.4'
         testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
         // H2 データベース（テスト用）
-    testImplementation 'com.h2database:h2:2.3.232'
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor:3.3.5'
+        testImplementation 'com.h2database:h2:2.3.232'
+        annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor:3.3.5'
 }
 
 sourceSets {
@@ -57,5 +57,16 @@ sourceSets {
 tasks.named('test') {
     useJUnitPlatform()
     systemProperty 'spring.profiles.active', 'test'
+}
+
+tasks.register('runBootJar', JavaExec) {
+    group = 'application'
+    description = 'Builds the Spring Boot jar and runs it using the Boot loader so it can be launched from the classpath.'
+
+    def bootJarTask = tasks.named('bootJar')
+    dependsOn(bootJarTask)
+
+    classpath = files(bootJarTask.flatMap { it.archiveFile })
+    mainClass.set('org.springframework.boot.loader.launch.JarLauncher')
 }
 
