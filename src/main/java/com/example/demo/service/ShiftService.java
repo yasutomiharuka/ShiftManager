@@ -1,17 +1,16 @@
 package com.example.demo.service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-<<<<<<< HEAD
-=======
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
->>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,21 +54,6 @@ public class ShiftService {
             return Collections.emptyMap();
         }
 
-<<<<<<< HEAD
-        // --- 表示対象全体の日付＋部署のシフト情報をまとめて取得 ---
-        // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
-        // 新）BETWEEN 版（両端含む）
-        //
-        // 2024-XX 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
-        // 原因は、表示側で CONFIRMED のみを拾う実装に依存していたため、
-        // DRAFT で保存されたレコードが無視されてしまっていたこと。
-        // ここでは DRAFT → CONFIRMED の順にマージして map に積むことで、
-        // 一時保存直後でもセルに値が反映されるようにする。
-        List<Shift> shiftsDraft = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
-                department, start, end, Status.DRAFT);
-        List<Shift> shiftsConfirmed = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
-                department, start, end, Status.CONFIRMED);
-=======
         List<LocalDate> normalizedDates = dates.stream()
                 .filter(Objects::nonNull)
                 .sorted()
@@ -82,16 +66,19 @@ public class ShiftService {
         LocalDate start = normalizedDates.get(0);
         LocalDate end = normalizedDates.get(normalizedDates.size() - 1);
 
-        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
->>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
+        // --- 表示対象全体の日付＋部署のシフト情報をまとめて取得 ---
+        // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
+        // 新）BETWEEN 版（両端含む）
+        //
+        // 2024-XX 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
+        // 原因は、表示側で CONFIRMED のみを拾う実装に依存していたため、
+        // DRAFT で保存されたレコードが無視されてしまっていたこと。
+        // ここでは DRAFT と CONFIRMED を統合し、優先順位付きでセルを決定する。
+        List<Shift> shiftsDraft = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
+                department, start, end, Status.DRAFT);
+        List<Shift> shiftsConfirmed = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
+                department, start, end, Status.CONFIRMED);
 
-<<<<<<< HEAD
-        // DRAFT を優先的に表示し、CONFIRMED は上書き（確定の方が優先度が高い想定）
-        Map<String, Shift> merged = new HashMap<>();
-        for (Shift shift : shiftsDraft) {
-            String key = shift.getUser().getId() + "_" + shift.getDate();
-            merged.put(key, shift);
-=======
         Set<Long> targetUserIds = users == null ? Set.of() : users.stream()
                 .filter(Objects::nonNull)
                 .map(UserProfileDto::getId)
@@ -100,38 +87,18 @@ public class ShiftService {
         Set<LocalDate> targetDates = new HashSet<>(normalizedDates);
 
         // ▼ 同一セルに複数レコード（DRAFT と CONFIRMED）が存在する場合に備えて
-        //    最新の状態（優先度: DRAFT > CONFIRMED、同一優先度では更新日時が新しい方）を採用する。
+        //    最新の状態（優先度: CONFIRMED > DRAFT、同一優先度では更新日時が新しい方）を採用する。
         Map<String, Shift> latestByCell = new HashMap<>();
-        for (Shift shift : shifts) {
-            if (shift == null || shift.getUser() == null || shift.getDate() == null) {
-                continue;
-            }
-
-            Long userId = shift.getUser().getId();
-            LocalDate date = shift.getDate();
-
-            if (!targetUserIds.isEmpty() && (userId == null || !targetUserIds.contains(userId))) {
-                continue;
-            }
-            if (!targetDates.contains(date)) {
-                continue;
-            }
-
-            String key = userId + "_" + date;
-            Shift current = latestByCell.get(key);
-            if (current == null || isPreferred(shift, current)) {
-                latestByCell.put(key, shift);
-            }
->>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
+        for (Shift shift : shiftsDraft) {
+            mergeShiftIfNecessary(latestByCell, targetUserIds, targetDates, shift);
         }
         for (Shift shift : shiftsConfirmed) {
-            String key = shift.getUser().getId() + "_" + shift.getDate();
-            merged.put(key, shift);
-        }        List<Shift> shifts = shiftRepository.findByDepartmentAndDateBetween(department, start, end);
+            mergeShiftIfNecessary(latestByCell, targetUserIds, targetDates, shift);
+        }
 
         Map<String, String> map = new HashMap<>();
 
-        for (Shift shift : merged.values()) {
+        for (Shift shift : latestByCell.values()) {
             Long userId = shift.getUser().getId();
             LocalDate date = shift.getDate();
             String shiftType = shift.getShiftType();
@@ -146,6 +113,72 @@ public class ShiftService {
         }
 
         return map;
+    }
+
+    private void mergeShiftIfNecessary(Map<String, Shift> latestByCell,
+                                       Set<Long> targetUserIds,
+                                       Set<LocalDate> targetDates,
+                                       Shift shift) {
+        if (shift == null || shift.getUser() == null || shift.getDate() == null) {
+            return;
+        }
+
+        Long userId = shift.getUser().getId();
+        LocalDate date = shift.getDate();
+
+        if (!targetUserIds.isEmpty() && (userId == null || !targetUserIds.contains(userId))) {
+            return;
+        }
+        if (!targetDates.contains(date)) {
+            return;
+        }
+
+        String key = userId + "_" + date;
+        Shift current = latestByCell.get(key);
+        if (current == null || isPreferred(shift, current)) {
+            latestByCell.put(key, shift);
+        }
+    }
+
+    /**
+     * 2つのシフトのうち、画面表示として優先すべき方を判定する。
+     * 優先順位:
+     *  1. Status が CONFIRMED の方を優先
+     *  2. Status が DRAFT の方を次点で優先
+     *  3. Status が同じ場合は updatedAt が新しい方を優先
+     */
+    private boolean isPreferred(Shift candidate, Shift current) {
+        Status candidateStatus = candidate.getStatus();
+        Status currentStatus = current.getStatus();
+
+        int candidatePriority = statusPriority(candidateStatus);
+        int currentPriority = statusPriority(currentStatus);
+
+        if (candidatePriority != currentPriority) {
+            return candidatePriority > currentPriority;
+        }
+
+        LocalDateTime candidateUpdated = candidate.getUpdatedAt();
+        LocalDateTime currentUpdated = current.getUpdatedAt();
+
+        if (candidateUpdated == null) {
+            return false;
+        }
+        if (currentUpdated == null) {
+            return true;
+        }
+
+        return candidateUpdated.isAfter(currentUpdated);
+    }
+
+    private int statusPriority(Status status) {
+        if (status == Status.CONFIRMED) {
+            return 2;
+        }
+        if (status == Status.DRAFT) {
+            return 1;
+        }
+        return 0;
     }
 
     // =====================================================
