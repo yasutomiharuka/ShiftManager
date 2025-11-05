@@ -1,14 +1,20 @@
-plugins {
-<<<<<<< HEAD
-    id 'java'
-    id 'org.springframework.boot' version '3.3.5'
-    id 'io.spring.dependency-management' version '1.1.6'
-=======
-        id 'java'
-        id 'org.springframework.boot' version '3.3.5'
-        id 'io.spring.dependency-management' version '1.1.6'
->>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
+buildscript {
+    repositories {
+        maven { url 'https://maven-central.storage-download.googleapis.com/maven2' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'org.springframework.boot:spring-boot-gradle-plugin:3.3.5'
+        classpath 'io.spring.gradle:dependency-management-plugin:1.1.6'
+    }
 }
+
+plugins {
+    id 'java'
+}
+
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
 
 group = 'com.example'
 version = '0.0.1-SNAPSHOT'
@@ -28,64 +34,6 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 17
 }
 
-<<<<<<< HEAD
-// ★ ツールチェーン経由の Test ランチャーは削除
-// tasks.withType(Test).configureEach {
-//     javaLauncher = javaToolchains.launcherFor {
-//         languageVersion = JavaLanguageVersion.of(17)
-//     }
-// }
-=======
-
-configurations {
-        compileOnly {
-                extendsFrom annotationProcessor
-        }
-}
-
-repositories {
-        mavenCentral()
-}
-
-dependencies {
-        implementation 'org.springframework.boot:spring-boot-starter-security:3.3.5'
-        implementation 'org.springframework.boot:spring-boot-starter-thymeleaf:3.3.5'
-        implementation 'org.springframework.boot:spring-boot-starter-validation:3.3.5'
-        implementation 'org.springframework.boot:spring-boot-starter-web:3.3.5'
-        implementation 'org.springframework.boot:spring-boot-starter-data-jpa:3.3.5'
-        compileOnly 'org.projectlombok:lombok:1.18.34'
-        developmentOnly 'org.springframework.boot:spring-boot-devtools:3.3.5'
-        runtimeOnly 'org.postgresql:postgresql:42.7.4'
-        annotationProcessor 'org.projectlombok:lombok:1.18.34'
-        testImplementation 'org.springframework.boot:spring-boot-starter-test:3.3.5'
-        testImplementation 'org.springframework.security:spring-security-test:6.3.4'
-        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-        // H2 データベース（テスト用）
-        testImplementation 'com.h2database:h2:2.3.232'
-        annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor:3.3.5'
-}
-
-sourceSets {
-    main {
-        java {
-            srcDirs = ['src/main/java']
-        }
-    }
-    test {
-        java {
-            srcDirs = ['src/test/java']
-        }
-    }
-}
->>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
-
-tasks.named('test') {
-    useJUnitPlatform()
-    // テストは test プロファイル（application-test.properties）を読む
-    systemProperty 'spring.profiles.active', 'test'
-}
-
-<<<<<<< HEAD
 configurations {
     compileOnly { extendsFrom annotationProcessor }
 }
@@ -120,7 +68,13 @@ sourceSets {
     main { java { srcDirs = ['src/main/java'] } }
     test { java { srcDirs = ['src/test/java'] } }
 }
-=======
+
+tasks.named('test') {
+    useJUnitPlatform()
+    // テストは test プロファイル（application-test.properties）を読む
+    systemProperty 'spring.profiles.active', 'test'
+}
+
 tasks.register('runBootJar', JavaExec) {
     group = 'application'
     description = 'Builds the Spring Boot jar and runs it using the Boot loader so it can be launched from the classpath.'
@@ -131,5 +85,3 @@ tasks.register('runBootJar', JavaExec) {
     classpath = files(bootJarTask.flatMap { it.archiveFile })
     mainClass.set('org.springframework.boot.loader.launch.JarLauncher')
 }
-
->>>>>>> branch 'main' of https://github.com/yasutomiharuka/ShiftManager.git
