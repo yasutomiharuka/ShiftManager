@@ -85,7 +85,7 @@ public class SecurityConfig {
         return http.getSharedObject(AuthenticationManager.class);
     }
 
-    // セッションイベントの公開 (並行セッションの管理用)
+    // セッションイベントの公開 (並行セッションの管理用) いったんコメントアウト Spring Boot 3 / Spring Security 6対応必要
     @Bean
     public HttpSessionEventPublisher httpSessionEventPublisher() {
         return new HttpSessionEventPublisher();

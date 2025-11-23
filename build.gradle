@@ -44,11 +44,12 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    
+    implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.thymeleaf.extras:thymeleaf-extras-springsecurity6'
 
     compileOnly 'org.projectlombok:lombok'
@@ -56,13 +57,19 @@ dependencies {
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
+
+    // 本番用
     runtimeOnly 'org.postgresql:postgresql'
+
+    // ★ テスト用（かつローカル実行でも使えるように実行時へも載せる）
+    runtimeOnly 'com.h2database:h2'
+    testImplementation 'com.h2database:h2'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
-    testImplementation 'com.h2database:h2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
 
 sourceSets {
     main { java { srcDirs = ['src/main/java'] } }
