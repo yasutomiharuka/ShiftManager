@@ -23,6 +23,10 @@ import com.example.demo.service.UserProfileService;
  * シフト生成に関する画面コントローラ
  * GET: 画面表示
  * POST: 一時保存、シフト生成処理など
+ *
+ * ※保存系の処理は ShiftEditController（/api/shift/request/...）に集約。
+ *   本コントローラは「表示専用」として、
+ *   シフト表示用のデータ（shiftMap など）をモデルに詰める役割。
  */
 @Controller
 @RequestMapping("/shift")
@@ -44,6 +48,12 @@ public class ShiftGenerationController {
     /**
      * シフト生成画面の表示
      * /shift/generate にGETアクセスされたとき呼ばれる
+     *
+     * 仕様：
+     *  - 対象月と部署でユーザー・シフトを絞り込み
+     *  - シフトは DRAFT / CONFIRMED の両方を取得し、
+     *    「セル単位で最新 or 優先度の高いもの（CONFIRMED > DRAFT）」を
+     *    ShiftService#getShiftMap でマージして表示に使用する
      */
     @GetMapping("/generate")
     public String showGeneratePage(
@@ -65,12 +75,15 @@ public class ShiftGenerationController {
                     .toList();
 
             // --- 3. 部署でユーザーを絞り込み ---
+            //   UserProfileService から全ユーザー取得 → department でフィルタ
             List<UserProfileDto> users = userProfileService.getAllUserProfiles().stream()
                     .filter(u -> department.equalsIgnoreCase(u.getDepartment()))
                     .toList();
             System.out.println("▶ ユーザー件数: " + users.size());
 
             // --- 4. シフト情報を取得 ---
+            //   ShiftService#getShiftMap は DRAFT / CONFIRMED 両方を読み込み、
+            //   セル単位で優先度（CONFIRMED > DRAFT）と updatedAt に従って1件にマージする
             Map<String, String> shiftMap = shiftService.getShiftMap(users, dates, department);
 
             // --- 5. 部署コードと日本語表示名のマッピング ---
@@ -79,7 +92,14 @@ public class ShiftGenerationController {
                     "main", "本社"
             );
 
-            // --- 6. Thymeleafに渡す値をmodelにセット ---
+            // --- 6. 画面バインド用フォームを生成 ---
+            // hidden項目などで th:field="*{department}" / "*{targetMonth}" を使う場合を想定し、
+            // ここでフォームにも設定しておく
+            ShiftGenerationForm form = new ShiftGenerationForm();
+            form.setDepartment(department);
+            form.setTargetMonth(targetMonth);
+
+            // --- 7. Thymeleafに渡す値をmodelにセット ---
             model.addAttribute("users", users);
             model.addAttribute("dates", dates);
             model.addAttribute("department", department);
@@ -89,16 +109,11 @@ public class ShiftGenerationController {
             model.addAttribute("selectedDepartmentName",
                     departmentDisplayMap.getOrDefault(department, department));
             model.addAttribute("shiftMap", shiftMap);
-            model.addAttribute("form", new ShiftGenerationForm());
+            model.addAttribute("form", form);
 
             // 可視化用フラグ
             model.addAttribute("noUsers", users == null || users.isEmpty());
             model.addAttribute("noDates", dates == null || dates.isEmpty());
-
-            // 保険
-            if (model.getAttribute("form") == null) {
-                model.addAttribute("form", new ShiftGenerationForm());
-            }
 
             System.out.println("▶ モデルへのデータ格納完了");
 

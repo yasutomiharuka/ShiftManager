@@ -26,6 +26,12 @@ import com.example.demo.service.ShiftService;
  * ▼変更点
  * ・フロント側のボタンはすべて /api/shift/request/save にPOSTし、name="action" の値で分岐
  * ・本クラスのルートも /api/shift/request に変更
+ *
+ * ▼ステータスの考え方
+ * ・DRAFT      … 下書き（途中経過）
+ * ・CONFIRMED  … 確定（その時点での正式なシフト）
+ *   → 画面表示時も CONFIRMED を優先して採用する（ShiftService 側の statusRank で制御）
+ * ・UNCONFIRM  … いったん確定されたシフトを DRAFT に戻す操作
  */
 @Controller
 @RequestMapping("/api/shift/request") // ★ 変更：/shift → /api/shift/request
@@ -40,17 +46,25 @@ public class ShiftEditController {
     /**
      * 共通保存エンドポイント
      * - action=DRAFT      : 一時保存（下書き）
-     * - action=CONFIRMED  : 確定保存
+     * - action=CONFIRMED  : 確定保存（正式シフトとして保存）
      * - action=UNCONFIRM  : 確定解除（確定→下書きに戻す）
      *
      * 例）generate.html のボタン：
      *  <button type="submit" formaction="/api/shift/request/save" name="action" value="DRAFT">一時保存</button>
+     *  <button type="submit" formaction="/api/shift/request/save" name="action" value="CONFIRMED">確定</button>
+     *  <button type="submit" formaction="/api/shift/request/save" name="action" value="UNCONFIRM">確定解除</button>
      */
     @PostMapping("/save")
     public String save(ShiftGenerationForm form,
                        @RequestParam(name = "action", defaultValue = "CONFIRMED") String action,
                        @RequestParam(name = "department", required = false) String departmentParam,
                        RedirectAttributes ra) {
+
+        // ★ここで受け取った内容をログに出す
+        System.out.println("DEBUG ShiftEditController.save: action=" + action
+            + ", deptParam=" + departmentParam
+            + ", formDept=" + (form != null ? form.getDepartment() : null)
+            + ", shifts=" + (form != null ? form.getShifts() : null));
 
         // 部署の取得（フォーム優先／パラメータを保険に）
         String resolvedDepartment = null;
@@ -60,38 +74,48 @@ public class ShiftEditController {
             resolvedDepartment = departmentParam.trim();
         }
 
+        // 部署が取れなければ保存不可
         if (!StringUtils.hasText(resolvedDepartment)) {
             ra.addFlashAttribute("notice", "部署が選択されていません。部署を選択してから保存してください。");
             return redirectToGenerate(form, ra);
         }
 
+        // サービス層では form.department を必ず参照するため、ここで統一
         form.setDepartment(resolvedDepartment);
 
         // action の大小文字・余白を吸収
-        final String normalizedAction = action == null ? "CONFIRMED" : action.trim().toUpperCase();
+        final String normalizedAction =
+                (action == null ? "CONFIRMED" : action.trim().toUpperCase());
 
         String notice;
+
         switch (normalizedAction) {
         case "DRAFT":
             // ▼ 下書き保存
+            // 1セル = 1レコードのまま、status=DRAFT として saveShifts() で upsert する。
             shiftService.saveShifts(form, Shift.Status.DRAFT);
             notice = "シフトを一時保存しました。";
             break;
 
         case "UNCONFIRM":
             // ▼ 確定解除（CONFIRMED → DRAFT）
+            // 対象月・部署の CONFIRMED を DRAFT に戻す処理は ShiftService#unconfirmShifts に委譲。
+            // ※基本的には「確定後に修正したくなったとき」に使用する。
             shiftService.unconfirmShifts(form);
             notice = "シフトの確定を解除しました。";
             break;
 
         case "CONFIRMED":
             // ▼ 確定保存
+            // 画面の入力内容を status=CONFIRMED で upsert。
+            // これにより、同一セルの既存 DRAFT を上書きして「正式なシフト」として扱う。
             shiftService.saveShifts(form, Shift.Status.CONFIRMED);
             notice = "シフトを確定しました。";
             break;
 
         default:
             // ▼ 想定外アクションは CONFIRMED と同等で扱う
+            // （万が一フロントの name/action 設定が漏れても、保存自体は行われるようにしておく）
             shiftService.saveShifts(form, Shift.Status.CONFIRMED);
             notice = "シフトを確定しました。";
             break;

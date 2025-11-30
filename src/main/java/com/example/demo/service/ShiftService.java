@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;             // ★ 追加：対象月の範囲計算用
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,10 +71,11 @@ public class ShiftService {
         // 旧）IN 版：findByDepartmentAndDateIn(department, dates);
         // 新）BETWEEN 版（両端含む）
         //
-        // 2024-XX 対応: 一時保存（DRAFT）の内容が画面に戻らないとの報告があった。
-        // 原因は、表示側で CONFIRMED のみを拾う実装に依存していたため、
-        // DRAFT で保存されたレコードが無視されてしまっていたこと。
-        // ここでは DRAFT と CONFIRMED を統合し、優先順位付きでセルを決定する。
+        // DRAFT と CONFIRMED の両方を取得し、
+        // 1セルに複数レコードがある場合は
+        //   優先順位: CONFIRMED > DRAFT
+        //   同じステータス同士なら updatedAt が新しい方
+        // で 1件に絞って表示に使う。
         List<Shift> shiftsDraft = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
                 department, start, end, Status.DRAFT);
         List<Shift> shiftsConfirmed = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
@@ -171,6 +173,10 @@ public class ShiftService {
         return candidateUpdated.isAfter(currentUpdated);
     }
 
+    /**
+     * ステータスごとの優先度
+     * CONFIRMED(2) > DRAFT(1) > その他(0)
+     */
     private int statusPriority(Status status) {
         if (status == Status.CONFIRMED) {
             return 2;
@@ -182,96 +188,182 @@ public class ShiftService {
     }
 
     // =====================================================
-    // ▼ 追加：シフトの保存・更新関連メソッド
+    // シフトの保存・更新関連メソッド
     // =====================================================
 
     /**
-     * 画面の入力データを一括で保存。
-     * - status = DRAFT（一時保存）または CONFIRMED（確定）
-     * - 値が "-" または "" のセルは削除（=クリア扱い）
+     * 画面の入力データを一括で保存する。
+     *
+     * - status = DRAFT（一時保存） または CONFIRMED（確定）
+     * - Map の key は "userId_YYYY-MM-DD" というフォーマットを想定
+     * - 値が "-" または 空文字("") のセルは「シフトなし」とみなして DELETE
+     * - それ以外の値は INSERT or UPDATE（Upsert）
      */
     @Transactional
     public void saveShifts(ShiftGenerationForm form, Status status) {
-        if (form == null || form.getShifts() == null) return;
 
+        // --- デバッグログ（null 安全） ---
+        System.out.println("DEBUG saveShifts: status=" + status
+                + ", dept=" + (form != null ? form.getDepartment() : null)
+                + ", shifts=" + (form != null ? form.getShifts() : null));
+
+        // フォーム or shifts が null / 空なら何もしないで終了
+        if (form == null || form.getShifts() == null || form.getShifts().isEmpty()) {
+            return;
+        }
+
+        // 部署は必須
         if (!StringUtils.hasText(form.getDepartment())) {
-            throw new IllegalArgumentException("Department must not be null or empty when saving shifts");
+            throw new IllegalArgumentException(
+                    "Department must not be null or empty when saving shifts");
         }
 
         final String department = form.getDepartment().trim();
         final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
+        // --- 1セルずつ処理 ---
         for (Map.Entry<String, String> entry : form.getShifts().entrySet()) {
-            String key = entry.getKey();       // "userId_YYYY-MM-DD"
+
+            String key = entry.getKey(); // 例: "6_2025-11-01"
             String value = entry.getValue() == null ? "" : entry.getValue().trim();
 
-            // --- キーを分解 ---
+            // ===== キーを userId と LocalDate に分解 =====
+            // ※ "userId_日付" という形式でないものはスキップ
             int underscore = key.indexOf('_');
-            if (underscore <= 0) continue;
+            if (underscore <= 0) {
+                // 不正フォーマットなのでこのセルは無視
+                continue;
+            }
+
             Long userId;
             LocalDate date;
             try {
                 userId = Long.valueOf(key.substring(0, underscore));
                 date = LocalDate.parse(key.substring(underscore + 1), DF);
             } catch (Exception e) {
-                continue; // フォーマット不正はスキップ
+                // パースに失敗した場合もそのセルだけスキップ
+                continue;
             }
 
-            // --- クリア処理（"-" or 空文字） ---
+            // ===== クリア処理 =====
+            // value が 空 or "-" は「シフトなし」と解釈し、既存レコードを削除
             if (value.isEmpty() || "-".equals(value)) {
+
+                // デバッグログ：削除対象のキー情報
+                System.out.println("DEBUG saveShifts: delete userId=" + userId
+                        + ", date=" + date
+                        + ", dept=" + department);
+
+                // 戻り値（削除件数）は利用しないので受け取らない
                 shiftRepository.deleteByUser_IdAndDateAndDepartment(userId, date, department);
                 continue;
             }
 
-            // --- Upsert処理 ---
-            var opt = shiftRepository.findByUser_IdAndDateAndDepartment(userId, date, department);
-            Shift shift = opt.orElseGet(Shift::new);
+            // ===== Upsert 処理 =====
+            // 既存レコードがあれば取得、なければ new Shift()
+            Shift shift = shiftRepository
+                    .findByUser_IdAndDateAndDepartment(userId, date, department)
+                    .orElseGet(Shift::new);
 
+            // 新規（id == null）の場合は主キーとなる情報をセット
             if (shift.getId() == null) {
+                // userProfiles テーブルからユーザーを取得（なければこのセルはスキップ）
                 var user = userProfileRepository.findById(userId).orElse(null);
-                if (user == null) continue;
+                if (user == null) {
+                    // 想定外だが、念のため NPE 回避のためスキップ
+                    System.out.println("DEBUG saveShifts: user not found. skip. userId=" + userId);
+                    continue;
+                }
                 shift.setUser(user);
                 shift.setDate(date);
                 shift.setDepartment(department);
+
+                // デバッグログ：新規作成
+                System.out.println("DEBUG saveShifts: create new entity userId=" + userId
+                        + ", date=" + date
+                        + ", dept=" + department);
+            } else {
+                // デバッグログ：既存レコード更新
+                System.out.println("DEBUG saveShifts: update existing entity id=" + shift.getId()
+                        + ", userId=" + userId
+                        + ", date=" + date
+                        + ", dept=" + department);
             }
 
-            shift.setShiftType(value); // "日","夜","明","休","有","臨(確)","臨(自)"
-            shift.setStatus(status);   // DRAFT or CONFIRMED
+            // 画面のセル値をそのまま shiftType に保存
+            // （"日","夜","明","休","有","臨(確)","臨(自)" など）
+            shift.setShiftType(value);
 
+            // 一時保存 or 確定のステータスをセット
+            shift.setStatus(status);
+
+            // デバッグログ：保存直前の状態確認
+            System.out.println("DEBUG saveShifts: before save entity id=" + shift.getId()
+                    + ", userId=" + userId
+                    + ", date=" + date
+                    + ", dept=" + department
+                    + ", type=" + value
+                    + ", status=" + status);
+
+            // 新規なら INSERT、既存なら UPDATE が発行される
             shiftRepository.save(shift);
         }
+
+        // ループの一番最後あたり（for の外）に追加
+        System.out.println("DEBUG saveShifts: completed. total=" + form.getShifts().size());
+
+        // ※ すぐに SQL を発行させたい場合はここで flush も可能（任意）
+        // shiftRepository.flush();
     }
 
     /**
      * 確定解除：指定範囲のシフトをすべて DRAFT に戻す。
+     *
+     * ▼仕様
+     * - 対象：フォームの「部署」＋「対象月」に属するシフト
+     * - 現在 CONFIRMED のものだけを DRAFT に変更する
+     * - DRAFT の行はそのまま（変更しない）
+     *
+     * 「一度確定した月を、もう一度編集可能な下書き状態に戻す」ための操作。
      */
     @Transactional
     public void unconfirmShifts(ShiftGenerationForm form) {
-        if (form == null || form.getShifts() == null) return;
 
+        // フォームが null なら何もしない
+        if (form == null) {
+            return;
+        }
+
+        // 部署必須チェック
         if (!StringUtils.hasText(form.getDepartment())) {
             throw new IllegalArgumentException("Department must not be null or empty when unconfirming shifts");
         }
-
         final String department = form.getDepartment().trim();
-        final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
-        for (String key : form.getShifts().keySet()) {
-            int underscore = key.indexOf('_');
-            if (underscore <= 0) continue;
-            try {
-                Long userId = Long.valueOf(key.substring(0, underscore));
-                LocalDate date = LocalDate.parse(key.substring(underscore + 1), DF);
+        // 対象月が設定されている前提で処理
+        YearMonth targetMonth = form.getTargetMonth();
+        if (targetMonth == null) {
+            // 万が一 targetMonth が入っていない場合は、従来どおり
+            // form.shifts のキーから日付を1件ずつ unconfirm する方法にフォールバックしてもよいが、
+            // ここでは明示的に例外にしておく（運用上、必ず targetMonth がセットされる想定）
+            throw new IllegalArgumentException("TargetMonth must not be null when unconfirming shifts");
+        }
 
-                var opt = shiftRepository.findByUser_IdAndDateAndDepartment(userId, date, department);
-                if (opt.isPresent()) {
-                    Shift shift = opt.get();
-                    shift.setStatus(Status.DRAFT);
-                    shiftRepository.save(shift);
-                }
-            } catch (Exception e) {
-                continue;
-            }
+        LocalDate start = targetMonth.atDay(1);
+        LocalDate end   = targetMonth.atEndOfMonth();
+
+        // 対象部署・対象月の CONFIRMED シフトを一括取得
+        List<Shift> confirmedList = shiftRepository.findByDepartmentAndDateBetweenAndStatus(
+                department, start, end, Status.CONFIRMED);
+
+        System.out.println("DEBUG unconfirmShifts: dept=" + department
+                + ", month=" + targetMonth
+                + ", confirmedCount=" + confirmedList.size());
+
+        // CONFIRMED → DRAFT に変更して保存
+        for (Shift shift : confirmedList) {
+            shift.setStatus(Status.DRAFT);
+            shiftRepository.save(shift);
         }
     }
 

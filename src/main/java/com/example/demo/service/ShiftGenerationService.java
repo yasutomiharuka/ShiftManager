@@ -1,21 +1,13 @@
 package com.example.demo.service;
 
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-import com.example.demo.model.Shift;
 import com.example.demo.model.ShiftRequest;
-import com.example.demo.model.ShiftRequirement;
-import com.example.demo.model.TemporaryWorkerAssignment;
 import com.example.demo.model.UserProfile;
 import com.example.demo.repository.ShiftRepository;
-import com.example.demo.repository.ShiftRequestRepository;
 import com.example.demo.repository.ShiftRequirementRepository;
 import com.example.demo.repository.TemporaryWorkerAssignmentRepository;
 import com.example.demo.repository.UserProfileRepository;
@@ -25,19 +17,16 @@ public class ShiftGenerationService {
 
     private final UserProfileRepository userProfileRepository;
     private final ShiftRequirementRepository shiftRequirementRepository;
-    private final ShiftRequestRepository shiftRequestRepository;
-    private final TemporaryWorkerAssignmentRepository temporaryWorkerAssignmentRepository;
     private final ShiftRepository shiftRepository;
+    private final TemporaryWorkerAssignmentRepository temporaryWorkerAssignmentRepository;
     
     // コンストラクタ　Spring がリポジトリを渡し、フィールドに代入
     public ShiftGenerationService(UserProfileRepository userProfileRepository,
                                   ShiftRequirementRepository shiftRequirementRepository,
-                                  ShiftRequestRepository shiftRequestRepository,
                                   TemporaryWorkerAssignmentRepository temporaryWorkerAssignmentRepository,
                                   ShiftRepository shiftRepository) {
         this.userProfileRepository = userProfileRepository;
         this.shiftRequirementRepository = shiftRequirementRepository;
-        this.shiftRequestRepository = shiftRequestRepository;
         this.temporaryWorkerAssignmentRepository = temporaryWorkerAssignmentRepository;
         this.shiftRepository = shiftRepository;
     }
@@ -49,6 +38,7 @@ public class ShiftGenerationService {
      *  - 1日単位で生成した Shift をまとめて saveAll することで DB I/O を削減（マイクロ最適化）
      *  - 事前臨時 → 正/パ の順に割当（今は単純な割当。将来はルール拡張想定）
      */
+    /*
     @Transactional
     public void generateShifts(int year, int month, String department) {
         // ① 対象月の開始日と終了日（末日）を算出
@@ -64,6 +54,7 @@ public class ShiftGenerationService {
                 shiftRequestRepository.findByDepartmentAndDateBetween(department, start, end)
                         .stream()
                         .collect(Collectors.groupingBy(ShiftRequest::getDate));
+      
 
         Map<LocalDate, List<ShiftRequirement>> requirementMap =
                 shiftRequirementRepository.findByDepartmentAndDateBetween(department, start, end)
@@ -144,7 +135,8 @@ public class ShiftGenerationService {
                 shiftRepository.saveAll(shiftsToSaveToday);
             }
         });
-    }
+    }　
+    */
 
     /**
      * 指定ユーザーが指定日・時間帯に勤務可能かを判定

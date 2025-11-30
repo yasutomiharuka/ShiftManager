@@ -42,411 +42,425 @@
 </head>
 <body>
 
+  <!-- ▼ 一時保存・確定などの結果メッセージ -->
   <div class="notice" th:if="${notice}" th:text="${notice}"></div>
 
-<!-- ▼ タイトル：selectedDepartmentName / month はnull時のフォールバックを用意 -->
-<h2 th:text="${(selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択'))} + '／' + (month != null ? month : '未指定') + ' のシフト生成'">
-  シフト生成
-</h2>
+  <!-- ▼ タイトル：selectedDepartmentName / month はnull時のフォールバックを用意 -->
+  <h2 th:text="${(selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択'))} + '／' + (month != null ? month : '未指定') + ' のシフト生成'">
+    シフト生成
+  </h2>
 
-<!-- ▼ データ欠落時の早期案内パネル -->
-<!-- 同一タグで th:with → th:if を併用せず、直接判定にする -->
-<div class="panel" style="background:#fffde7;"
-     th:if="${(users == null or #lists.isEmpty(users)) 
-             or (dates == null or #lists.isEmpty(dates))}">
-  <div class="muted">
-    <strong>注意:</strong>
-    <span th:if="${users == null or #lists.isEmpty(users)}">
-      表示できる職員がいません（部署選択をご確認ください）。
-    </span>
-    <span th:if="${(users == null or #lists.isEmpty(users)) 
-                  and (dates == null or #lists.isEmpty(dates))}">／</span>
-    <span th:if="${dates == null or #lists.isEmpty(dates)}">
-      対象月の日付が取得できませんでした（URLの <code>?month=yyyy-MM</code> を確認）。
-    </span>
-  </div>
-</div>
-
-<!-- ▼ フィルタ／遷移：departmentNames, departments が null の場合でも空ループで落ちない -->
-<form method="get" th:action="@{/shift/generate}" class="toolbar">
-  <label>部署:</label>
-  <select name="department">
-    <option th:each="deptCode : ${departments != null ? departments : {}}"
-            th:value="${deptCode}"
-            th:text="${departmentNames != null ? departmentNames[deptCode.toString()] : deptCode}"
-            th:selected="${deptCode == department}">
-      <!-- options -->
-    </option>
-  </select>
-
-  <label>月:</label>
-  <!-- month は YearMonth を想定。null の場合は空表示 -->
-  <input type="month" name="month" th:value="${month != null ? month : ''}"/>
-
-  <button type="submit">表示</button>
-
-  <span class="muted">／ 画面遷移:</span>
-  <a th:href="@{/shift/list(department=${department}, month=${month})}">シフト一覧</a> |
-  <a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集</a>
-</form>
-
-<!-- ▼ モード切替（フロントのみ。POST時は hidden の uiMode で受け取れる） -->
-<div class="panel">
-  <strong>入力モード</strong>：
-  <button type="button" onclick="setMode('normal')">通常</button>
-  <button type="button" onclick="setMode('request')">希望休・有給</button>
-  <button type="button" onclick="setMode('temp')">臨時職員（事前）</button>
-  <span class="muted">（セルをクリックして切替）</span>
-
-  <div class="legend" style="margin-top:8px;">
-    <span class="日">日</span>
-    <span class="夜">夜</span>
-    <span class="明">明</span>
-    <span class="休">休</span>
-    <span class="有">有</span>
-    <span class="臨(確)">臨(確)</span>
-    <span class="臨(自)">臨(自)</span>
-  </div>
-</div>
-
-<!-- ▼ 追加：ペイント用パレット（ホットキー対応） -->
-<div class="panel">
-  <div class="palette" id="palette">
-    <!-- data-val で値、data-key で推奨キーを明示 -->
-    <span>ペイント:</span>
-    <span class="swatch 日 active" data-val="日" data-key="1">日 <span class="kbd">1</span></span>
-    <span class="swatch 夜" data-val="夜" data-key="2">夜 <span class="kbd">2</span></span>
-    <span class="swatch 明" data-val="明" data-key="3">明 <span class="kbd">3</span></span>
-    <span class="swatch 休" data-val="休" data-key="4">休 <span class="kbd">4</span></span>
-    <span class="swatch 有" data-val="有" data-key="5">有 <span class="kbd">5</span></span>
-    <span class="swatch 臨(確)" data-val="臨(確)" data-key="6">臨(確) <span class="kbd">6</span></span>
-    <span class="swatch 臨(自)" data-val="臨(自)" data-key="7">臨(自) <span class="kbd">7</span></span>
-    <span class="swatch" data-val="-" data-key="0">クリア <span class="kbd">0</span></span>
-    <span class="muted">／ ドラッグで範囲塗り、<span class="kbd">Alt</span> を押しながらで一時的にクリア。</span>
-  </div>
-</div>
-
-<!-- ▼ メイン表（ユーザー×日付） -->
-<form id="generateForm" method="post" th:action="@{/shift/generate}">
-	
-  <!-- CSRFトークンの設置 -->
-  <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
-
-  <!-- 画面状態の保持 -->
-  <input type="hidden" name="department" th:value="${department != null ? department : ''}">
-  <input type="hidden" name="targetMonth"      th:value="${month != null ? month : ''}">
-  <input type="hidden" id="uiMode" name="uiMode" value="normal">
-  
-  <!-- shiftMap が空なら初期状態の案内を表示 -->
-  <div class="panel" style="background:#f1f8e9;"
-       th:if="${shiftMap == null or #maps.isEmpty(shiftMap)}">
+  <!-- ▼ データ欠落時の早期案内パネル -->
+  <div class="panel" style="background:#fffde7;"
+       th:if="${(users == null or #lists.isEmpty(users)) 
+               or (dates == null or #lists.isEmpty(dates))}">
     <div class="muted">
-      この月のシフトデータはまだ登録されていません。<br>
-      セルをクリックして入力するか、<strong>「シフトを生成する」</strong> を押して自動割当を実行してください。
+      <strong>注意:</strong>
+      <span th:if="${users == null or #lists.isEmpty(users)}">
+        表示できる職員がいません（部署選択をご確認ください）。
+      </span>
+      <span th:if="${(users == null or #lists.isEmpty(users)) 
+                    and (dates == null or #lists.isEmpty(dates))}">／</span>
+      <span th:if="${dates == null or #lists.isEmpty(dates)}">
+        対象月の日付が取得できませんでした（URLの <code>?month=yyyy-MM</code> を確認）。
+      </span>
     </div>
   </div>
 
-  <table id="shiftTable">
-    <thead class="sticky-head">
-      <tr>
-        <th class="sticky-col">職員名</th>
-        <!-- dates が null の場合でも空ループ（ヘッダのみ） -->
-        <th th:each="d : ${dates != null ? dates : {}}"
-            th:text="${#temporals.format(d, 'M/d(E)')}">
-          <!-- 日付 -->
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      <!-- users が null の場合でも空ループ -->
-      <tr th:each="user : ${users != null ? users : {}}">
-        <td class="sticky-col"
-            th:text="${(user != null && user.lastName != null ? user.lastName : '') + ' ' + (user != null && user.firstName != null ? user.firstName : '')}">
-          氏名
-        </td>
+  <!-- ▼ 部署・月選択フォーム（GET） -->
+  <form method="get" th:action="@{/shift/generate}" class="toolbar">
+    <label>部署:</label>
+    <select name="department">
+      <option th:each="deptCode : ${departments != null ? departments : {}}"
+              th:value="${deptCode}"
+              th:text="${departmentNames != null ? departmentNames[deptCode.toString()] : deptCode}"
+              th:selected="${deptCode == department}">
+        <!-- options -->
+      </option>
+    </select>
 
-        <!-- セル：shiftMap が null でも落ちないように th:with で val を取得し三項でガード -->
-        <td th:each="d : ${dates != null ? dates : {}}"
-            th:with="dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
-                     key=${user.id + '_' + dateKey},
-                     val=${shiftMap != null ? #strings.trim(shiftMap[key]) : null}"
-            th:classappend="${!#strings.isEmpty(val) ? val : ''}">
-          
-          <!-- ▼ 追加：属性保持（onclickは削除） -->
-          <button
-            type="button"
-            class="cell-btn"
-            th:id="${'btn_' + user.id + '_' + dateKey}"
-            th:data-user-id="${user.id}"
-            th:data-date="${dateKey}"
-            th:text="${!#strings.isEmpty(val) ? val : '-'}">
-          </button>
+    <label>月:</label>
+    <!-- month は YearMonth を想定。null の場合は空表示 -->
+    <input type="month" name="month" th:value="${month != null ? month : ''}"/>
 
-          <!-- 送信用 hidden（nameは userId_date で一意）。null の場合は空文字で送る -->
-          <input type="hidden"
-                 th:id="${'val_' + user.id + '_' + dateKey}"
-                 th:name="${'shifts[' + user.id + '_' + dateKey + ']'}"
-                 th:value="${val != null ? val : ''}">
-        </td>
-      </tr>
-      <!-- users または dates が空の場合のフォールバック表示 -->
-      <tr th:if="${users == null || #lists.isEmpty(users)}">
-        <td colspan="999" class="muted">表示できる職員がいません（部署選択をご確認ください）。</td>
-      </tr>
-    </tbody>
-  </table>
+    <button type="submit">表示</button>
 
-  <div class="muted" style="margin-top:6px;">
-    <!-- モードの切替ルールを明示 -->
-    ※ 通常モード：<code>日 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
-    希望休モード：<code>休 → 有 → -</code>／
-    臨時モード：<code>臨(確) → -</code>
-    <br>
-    <!-- ▼ 追加：操作ヘルプ -->
-    ※ ペイント：上のパレットで種別選択 → セルをドラッグして塗りつぶし／数字キー <code>1〜7</code> で即変更、<code>0</code> でクリア、<code>Alt</code> を押しながらドラッグで一時的クリア
+    <span class="muted">／ 画面遷移:</span>
+    <a th:href="@{/shift/list(department=${department}, month=${month})}">シフト一覧</a> |
+    <a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集</a>
+  </form>
+
+  <!-- ▼ 入力モード切替（UIのみ） -->
+  <div class="panel">
+    <strong>入力モード</strong>：
+    <button type="button" onclick="setMode('normal')">通常</button>
+    <button type="button" onclick="setMode('request')">希望休・有給</button>
+    <button type="button" onclick="setMode('temp')">臨時職員（事前）</button>
+    <span class="muted">（セルをクリックして切替）</span>
+
+    <div class="legend" style="margin-top:8px;">
+      <span class="日">日</span>
+      <span class="夜">夜</span>
+      <span class="明">明</span>
+      <span class="休">休</span>
+      <span class="有">有</span>
+      <span class="臨(確)">臨(確)</span>
+      <span class="臨(自)">臨(自)</span>
+    </div>
   </div>
 
-  <br>
-
-  <!-- ▼ 必要人員（時間帯ごと）。requirements も POST でまとめて送る -->
+  <!-- ▼ ペイント用パレット -->
   <div class="panel">
-    <strong>必要人員の入力（部署別・時間帯）</strong>
-    <table>
-      <thead>
+    <div class="palette" id="palette">
+      <span>ペイント:</span>
+      <span class="swatch 日 active" data-val="日" data-key="1">日 <span class="kbd">1</span></span>
+      <span class="swatch 夜" data-val="夜" data-key="2">夜 <span class="kbd">2</span></span>
+      <span class="swatch 明" data-val="明" data-key="3">明 <span class="kbd">3</span></span>
+      <span class="swatch 休" data-val="休" data-key="4">休 <span class="kbd">4</span></span>
+      <span class="swatch 有" data-val="有" data-key="5">有 <span class="kbd">5</span></span>
+      <span class="swatch 臨(確)" data-val="臨(確)" data-key="6">臨(確) <span class="kbd">6</span></span>
+      <span class="swatch 臨(自)" data-val="臨(自)" data-key="7">臨(自) <span class="kbd">7</span></span>
+      <span class="swatch" data-val="-" data-key="0">クリア <span class="kbd">0</span></span>
+      <span class="muted">／ ドラッグで範囲塗り、<span class="kbd">Alt</span> を押しながらで一時的にクリア。</span>
+    </div>
+  </div>
+
+  <!-- ▼ メイン表（POST 用フォーム） -->
+  <!--   ※ この form は「一時保存／確定／確定解除／生成」すべて共通で使う -->
+  <form id="generateForm" method="post" th:action="@{/shift/generate}">
+
+    <!-- CSRFトークン -->
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+
+    <!-- 画面状態の保持：Controller の ShiftGenerationForm / @RequestParam と一致させる -->
+    <input type="hidden" name="department"  th:value="${department != null ? department : ''}">
+    <input type="hidden" name="targetMonth" th:value="${month != null ? month : ''}">
+    <input type="hidden" id="uiMode" name="uiMode" value="normal">
+
+    <!-- ▼ shiftMap が空なら初期案内 -->
+    <div class="panel" style="background:#f1f8e9;"
+         th:if="${shiftMap == null or #maps.isEmpty(shiftMap)}">
+      <div class="muted">
+        この月のシフトデータはまだ登録されていません。<br>
+        セルをクリックして入力するか、<strong>「シフトを生成する」</strong> を押して自動割当を実行してください。
+      </div>
+    </div>
+
+    <table id="shiftTable">
+      <thead class="sticky-head">
         <tr>
-          <th>日付</th>
-          <th>9:00-14:00</th>
-          <th>14:00-16:00</th>
-          <th>16:00-18:00</th>
-          <th>夜間帯</th>
+          <th class="sticky-col">職員名</th>
+          <!-- dates が null の場合でも空ループ（ヘッダのみ） -->
+          <th th:each="d : ${dates != null ? dates : {}}"
+              th:text="${#temporals.format(d, 'M/d(E)')}">
+            <!-- 日付 -->
+          </th>
         </tr>
       </thead>
       <tbody>
-        <!-- dates が null でも空ループ -->
-        <tr th:each="d : ${dates != null ? dates : {}}">
-          <td th:text="${#temporals.format(d, 'M/d')}">M/d</td>
-          <td><input type="number" min="0" th:name="${'requirements[' + d + '_9:00-14:00]'}"></td>
-          <td><input type="number" min="0" th:name="${'requirements[' + d + '_14:00-16:00]'}"></td>
-          <td><input type="number" min="0" th:name="${'requirements[' + d + '_16:00-18:00]'}"></td>
-          <td><input type="number" min="0" th:name="${'requirements[' + d + '_夜間帯]'}"></td>
+        <!-- ▼ 1行＝1ユーザー -->
+        <tr th:each="user : ${users != null ? users : {}}">
+          <td class="sticky-col"
+              th:text="${(user != null && user.lastName != null ? user.lastName : '') + ' ' + (user != null && user.firstName != null ? user.firstName : '')}">
+            氏名
+          </td>
+
+          <!-- ▼ 1セル＝1日分 -->
+          <!--   ★ここが「画面に反映される／されない」の肝です -->
+          <td th:each="d : ${dates != null ? dates : {}}"
+              th:with="
+                dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+                /* Map<String,String> の key は service 側と必ず同じ形式にする */
+                /* ShiftService#getShiftMap → key = userId + '_' + LocalDate.toString() */
+                key=${user.id + '_' + dateKey},
+                val=${shiftMap != null ? #strings.trim(shiftMap[key]) : null}
+              "
+              th:classappend="${!#strings.isEmpty(val) ? val : ''}"
+              th:data-debug-key="${key}"        <!-- デバッグ用：DevToolsで確認可能 -->
+              th:data-debug-val="${val}">
+
+            <!-- 表示用ボタン（クリック対象） -->
+            <button
+              type="button"
+              class="cell-btn"
+              th:id="${'btn_' + user.id + '_' + dateKey}"
+              th:data-user-id="${user.id}"
+              th:data-date="${dateKey}"
+              th:text="${!#strings.isEmpty(val) ? val : '-'}">
+            </button>
+
+            <!-- 送信用 hidden -->
+            <!--   name="shifts[6_2025-11-01]" → ShiftGenerationForm.shifts にマッピングされる -->
+            <!--   初期値 val を data-original-value にも入れて、変更有無をJSで判定 -->
+            <input type="hidden"
+                   th:id="${'val_' + user.id + '_' + dateKey}"
+                   th:name="${'shifts[' + user.id + '_' + dateKey + ']'}"
+                   th:value="${val != null ? val : ''}"
+                   th:data-original-value="${val != null ? val : ''}"
+                   disabled="disabled" />
+          </td>
         </tr>
-        <tr th:if="${dates == null || #lists.isEmpty(dates)}">
-          <td colspan="5" class="muted">対象月の日付が取得できませんでした。</td>
+
+        <!-- users が空の場合のフォールバック -->
+        <tr th:if="${users == null || #lists.isEmpty(users)}">
+          <td colspan="999" class="muted">表示できる職員がいません（部署選択をご確認ください）。</td>
         </tr>
       </tbody>
     </table>
-    <div class="muted">
-      ※ 保存先想定：<code>ShiftRequirement(date / department / timeSlot / requiredCount)</code>
+
+    <div class="muted" style="margin-top:6px;">
+      ※ 通常モード：<code>日 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
+      希望休モード：<code>休 → 有 → -</code>／
+      臨時モード：<code>臨(確) → -</code>
+      <br>
+      ※ ペイント：上のパレットで種別選択 → セルをドラッグして塗りつぶし／数字キー <code>1〜7</code> で即変更、<code>0</code> でクリア、<code>Alt</code> を押しながらドラッグで一時的クリア
     </div>
-  </div>
 
-  <!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
-  <div style="display:flex; gap:10px; flex-wrap:wrap;">
+    <br>
 
-    <!-- 一時保存（下書き） -->
-    <button type="submit"
-            th:formaction="@{/api/shift/request/save}"
-            formmethod="post"
-            name="action" value="DRAFT">
-      一時保存
-    </button>
+    <!-- ▼ 必要人員入力テーブル -->
+    <div class="panel">
+      <strong>必要人員の入力（部署別・時間帯）</strong>
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>9:00-14:00</th>
+            <th>14:00-16:00</th>
+            <th>16:00-18:00</th>
+            <th>夜間帯</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="d : ${dates != null ? dates : {}}">
+            <td th:text="${#temporals.format(d, 'M/d')}">M/d</td>
+            <td><input type="number" min="0" th:name="${'requirements[' + d + '_9:00-14:00]'}"></td>
+            <td><input type="number" min="0" th:name="${'requirements[' + d + '_14:00-16:00]'}"></td>
+            <td><input type="number" min="0" th:name="${'requirements[' + d + '_16:00-18:00]'}"></td>
+            <td><input type="number" min="0" th:name="${'requirements[' + d + '_夜間帯]'}"></td>
+          </tr>
+          <tr th:if="${dates == null || #lists.isEmpty(dates)}">
+            <td colspan="5" class="muted">対象月の日付が取得できませんでした。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="muted">
+        ※ 保存先想定：<code>ShiftRequirement(date / department / timeSlot / requiredCount)</code>
+      </div>
+    </div>
 
-    <!-- 確定（生成に反映） -->
-    <button type="submit"
-            th:formaction="@{/api/shift/request/save}"
-            formmethod="post"
-            name="action" value="CONFIRMED">
-      確定（生成に反映）
-    </button>
+    <!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
 
-    <!-- 確定解除（確定→下書きに戻す想定） -->
-    <button type="submit"
-            th:formaction="@{/api/shift/request/save}"
-            formmethod="post"
-            name="action" value="UNCONFIRM">
-      確定解除
-    </button>
+      <!-- 一時保存（下書き）: ShiftEditController#save(action=DRAFT) -->
+      <button type="submit"
+              th:formaction="@{/api/shift/request/save}"
+              formmethod="post"
+              name="action" value="DRAFT">
+        一時保存
+      </button>
 
-    <!-- 臨時職員（事前）保存：従来のAPIを利用 -->
-    <button type="submit"
-            th:formaction="@{/api/shift/temp/save}"
-            formmethod="post">
-      臨時職員を保存
-    </button>
+      <!-- 確定（生成に反映）: ShiftEditController#save(action=CONFIRMED) -->
+      <button type="submit"
+              th:formaction="@{/api/shift/request/save}"
+              formmethod="post"
+              name="action" value="CONFIRMED">
+        確定（生成に反映）
+      </button>
 
-    <!-- 自動割当 実行（既存の生成処理へ） -->
-    <button type="submit"
-            th:formaction="@{/shift/generate}"
-            formmethod="post">
-      シフトを生成する
-    </button>
+      <!-- 確定解除: ShiftEditController#save(action=UNCONFIRM) -->
+      <button type="submit"
+              th:formaction="@{/api/shift/request/save}"
+              formmethod="post"
+              name="action" value="UNCONFIRM">
+        確定解除
+      </button>
 
-    <!-- 戻る -->
-    <a th:href="@{/shift/list(department=${department}, month=${month})}">一覧へ戻る</a>
-  </div>
+      <!-- 臨時職員（事前）保存：既存API -->
+      <button type="submit"
+              th:formaction="@{/api/shift/temp/save}"
+              formmethod="post">
+        臨時職員を保存
+      </button>
 
-</form>
+      <!-- 自動割当 実行（既存の生成処理へ） -->
+      <button type="submit"
+              th:formaction="@{/shift/generate}"
+              formmethod="post">
+        シフトを生成する
+      </button>
 
-<script>
-  // ========== フロント側の最小ロジック ==========
+      <!-- 戻る -->
+      <a th:href="@{/shift/list(department=${department}, month=${month})}">一覧へ戻る</a>
+    </div>
 
-  // 勤務種別の回し方（UI定義）
-  const cycleNormal  = ['日','夜','明','休','有','臨(確)','臨(自)','-'];
-  const cycleRequest = ['休','有','-'];
-  const cycleTemp    = ['臨(確)','-'];
+  </form>
 
-  function currentCycle(){
-    // hidden の uiMode を参照して、サイクルを切り替える
-    const m = document.getElementById('uiMode').value;
-    if(m === 'request') return cycleRequest;
-    if(m === 'temp')    return cycleTemp;
-    return cycleNormal;
-  }
+  <script>
+    // ========== フロント側ロジック ==========
 
-  function setMode(m){
-    // 画面表示のみ切替（POST時は hidden の uiMode でサーバへ渡る）
-    document.getElementById('uiMode').value = m;
-  }
+    // 勤務種別の回し方（UI定義）
+    const cycleNormal  = ['日','夜','明','休','有','臨(確)','臨(自)','-'];
+    const cycleRequest = ['休','有','-'];
+    const cycleTemp    = ['臨(確)','-'];
 
-  // ▼ 共通：セルへ値を適用（ペイント／サイクルの両方から呼び出す）
-  function applyToCell(btn, value){
-    // ボタンIDは "btn_userId_YYYY-MM-DD" を想定
-    const id = btn.id.replace('btn_',''); // userId_YYYY-MM-DD
-    const hidden = document.getElementById('val_' + id);
+    function currentCycle(){
+      const m = document.getElementById('uiMode').value;
+      if(m === 'request') return cycleRequest;
+      if(m === 'temp')    return cycleTemp;
+      return cycleNormal;
+    }
 
-    // 表示更新（value が '' または '-' の場合は '-' 表示）
-    const next = (value === '' || value === '-') ? '-' : value;
-    btn.textContent = next;
+    function setMode(m){
+      document.getElementById('uiMode').value = m;
+    }
 
-    // 背景色クラスの更新（親 td のクラスを一度リセットし、必要なら追加）
-    const td = btn.parentElement;
-    td.className = '';
-    if(next && next !== '-') td.classList.add(next);
+    // ▼ 変更セルのみ送信するためのフラグ管理
+    function updateChangedState(hidden){
+      const original = hidden.dataset.originalValue ?? '';
+      const current  = hidden.value ?? '';
+      const isChanged = original !== current;
 
-    // 送信値更新（"-" は空文字に）
-    if (hidden) hidden.value = (next === '-' ? '' : next);
-  }
+      hidden.toggleAttribute('disabled', !isChanged);
 
-  // ▼ 従来の“サイクル”処理（Ctrl/⌘クリック時だけ使う）
-  function doCycle(btn){
-    const id = btn.id.replace('btn_','');
-    const hidden = document.getElementById('val_' + id);
-    const before = (hidden && hidden.value ? hidden.value.trim() : '');
-    const cycle = currentCycle();
-
-    let idx = cycle.indexOf(before);
-    idx = (idx === -1) ? 0 : (idx + 1) % cycle.length;
-    applyToCell(btn, cycle[idx]);
-  }
-
-  // ===== ここから「ペイント方式」追加 =====
-  const palette = document.getElementById('palette');
-  const shiftTable = document.getElementById('shiftTable');
-
-  let paintVal = '日';     // デフォルトの塗り値
-  let isDragging = false;  // ドラッグ中フラグ
-
-  // パレット選択
-  if (palette) {
-    palette.addEventListener('click', (e) => {
-      const sw = e.target.closest('.swatch');
-      if (!sw) return;
-      paintVal = sw.dataset.val || '日';
-      // Active表示切替
-      palette.querySelectorAll('.swatch').forEach(el => el.classList.remove('active'));
-      sw.classList.add('active');
-    });
-  }
-
-  // 数字キーでパレット＆セルを即変更（フォーカスがテーブル内のとき）
-  const keyMap = {'1':'日','2':'夜','3':'明','4':'休','5':'有','6':'臨(確)','7':'臨(自)','0':'-'};
-  shiftTable.addEventListener('keydown', (e) => {
-    if (keyMap[e.key]) {
-      // フォーカス中のボタンに適用
-      const btn = e.target.closest('.cell-btn');
-      if (btn) {
-        applyToCell(btn, keyMap[e.key]);
-        e.preventDefault();
+      if (isChanged) {
+        hidden.dataset.changed = 'true';
+      } else {
+        delete hidden.dataset.changed;
       }
-      // パレットのハイライトも切り替え
-      const sw = palette?.querySelector(`.swatch[data-val="${keyMap[e.key]}"]`);
-      if (sw) {
+    }
+
+    // ▼ セルへ値を適用（ペイント／サイクル共通）
+    function applyToCell(btn, value){
+      const id = btn.id.replace('btn_',''); // userId_YYYY-MM-DD
+      const hidden = document.getElementById('val_' + id);
+
+      const next = (value === '' || value === '-') ? '-' : value;
+      btn.textContent = next;
+
+      const td = btn.parentElement;
+      td.className = '';
+      if(next && next !== '-') td.classList.add(next);
+
+      if (hidden) {
+        hidden.value = (next === '-' ? '' : next);
+        updateChangedState(hidden);
+      }
+    }
+
+    // ▼ サイクル（Ctrl/⌘クリック時）
+    function doCycle(btn){
+      const id = btn.id.replace('btn_','');
+      const hidden = document.getElementById('val_' + id);
+      const before = (hidden && hidden.value ? hidden.value.trim() : '');
+      const cycle = currentCycle();
+
+      let idx = cycle.indexOf(before);
+      idx = (idx === -1) ? 0 : (idx + 1) % cycle.length;
+      applyToCell(btn, cycle[idx]);
+    }
+
+    // ===== ペイント方式 =====
+    const palette    = document.getElementById('palette');
+    const shiftTable = document.getElementById('shiftTable');
+
+    let paintVal   = '日';
+    let isDragging = false;
+
+    if (palette) {
+      palette.addEventListener('click', (e) => {
+        const sw = e.target.closest('.swatch');
+        if (!sw) return;
+        paintVal = sw.dataset.val || '日';
+
         palette.querySelectorAll('.swatch').forEach(el => el.classList.remove('active'));
         sw.classList.add('active');
-        paintVal = keyMap[e.key]; // パレット状態も同期
+      });
+    }
+
+    const keyMap = {'1':'日','2':'夜','3':'明','4':'休','5':'有','6':'臨(確)','7':'臨(自)','0':'-'};
+    shiftTable.addEventListener('keydown', (e) => {
+      if (keyMap[e.key]) {
+        const btn = e.target.closest('.cell-btn');
+        if (btn) {
+          applyToCell(btn, keyMap[e.key]);
+          e.preventDefault();
+        }
+        const sw = palette?.querySelector(`.swatch[data-val="${keyMap[e.key]}"]`);
+        if (sw) {
+          palette.querySelectorAll('.swatch').forEach(el => el.classList.remove('active'));
+          sw.classList.add('active');
+          paintVal = keyMap[e.key];
+        }
       }
-    }
-  });
+    });
 
-  // ドラッグ塗り（Alt押下中は一時的にクリア）
-  const pickTargetBtn = (ev) => {
-    const target = ev.target.closest('.cell-btn');
-    return target || null;
-  };
+    const pickTargetBtn = (ev) => ev.target.closest('.cell-btn') || null;
 
-  shiftTable.addEventListener('mousedown', (e) => {
-    const btn = pickTargetBtn(e);
-    if (!btn) return;
+    shiftTable.addEventListener('mousedown', (e) => {
+      const btn = pickTargetBtn(e);
+      if (!btn) return;
 
-    // Ctrl/⌘クリックは“サイクル”のため、ここでは塗らない
-    if (e.ctrlKey || e.metaKey) {
-      isDragging = false; // ドラッグ開始扱いにしない
-      return;
-    }
+      if (e.ctrlKey || e.metaKey) {
+        isDragging = false;
+        return;
+      }
 
-    // 単発クリック or ドラッグ開始で“ペイント”
-    isDragging = true;
-    const val = e.altKey ? '-' : paintVal; // Altでクリア
-    applyToCell(btn, val);
-    e.preventDefault(); // テキスト選択防止
-  });
-
-  shiftTable.addEventListener('mouseover', (e) => {
-    if (!isDragging) return;
-    const btn = pickTargetBtn(e);
-    if (!btn) return;
-    const val = e.altKey ? '-' : paintVal;
-    applyToCell(btn, val);
-  });
-
-  window.addEventListener('mouseup', () => { isDragging = false; });
-
-  // クリック（通常時は何もしない／Ctrl/⌘クリックでサイクル）
-  shiftTable.addEventListener('click', (e) => {
-    const btn = e.target.closest('.cell-btn');
-    if (!btn) return;
-    if (e.ctrlKey || e.metaKey) {
-      // “サイクル”はここで実行（mousedownでは塗っていない）
-      doCycle(btn);
+      isDragging = true;
+      const val = e.altKey ? '-' : paintVal;
+      applyToCell(btn, val);
       e.preventDefault();
+    });
+
+    shiftTable.addEventListener('mouseover', (e) => {
+      if (!isDragging) return;
+      const btn = pickTargetBtn(e);
+      if (!btn) return;
+      const val = e.altKey ? '-' : paintVal;
+      applyToCell(btn, val);
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    shiftTable.addEventListener('click', (e) => {
+      const btn = e.target.closest('.cell-btn');
+      if (!btn) return;
+      if (e.ctrlKey || e.metaKey) {
+        doCycle(btn);
+        e.preventDefault();
+      }
+    });
+
+    let touchPainting = false;
+    shiftTable.addEventListener('touchstart', (e) => {
+      const touch = e.touches[0];
+      if (!touch) return;
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const btn = el?.closest?.('.cell-btn');
+      if (!btn) return;
+      touchPainting = true;
+      applyToCell(btn, paintVal);
+    }, {passive: true});
+
+    shiftTable.addEventListener('touchmove', (e) => {
+      if (!touchPainting) return;
+      const touch = e.touches[0];
+      const el = document.elementFromPoint(touch.clientX, touch.clientY);
+      const btn = el?.closest?.('.cell-btn');
+      if (!btn) return;
+      applyToCell(btn, paintVal);
+    }, {passive: true});
+
+    window.addEventListener('touchend', () => { touchPainting = false; });
+
+    // Submit 直前に念のため全 hidden の変更状態を再評価
+    const generateForm = document.getElementById('generateForm');
+    if (generateForm) {
+      generateForm.addEventListener('submit', () => {
+        document.querySelectorAll('input[type="hidden"][id^="val_"]').forEach(updateChangedState);
+      });
     }
-    // 通常クリックは mousedown で“塗り”済みなので何もしない
-  });
-
-  // タッチ操作（長押し不要。タッチ中はドラッグ塗り）
-  let touchPainting = false;
-  shiftTable.addEventListener('touchstart', (e) => {
-    const touch = e.touches[0];
-    if (!touch) return;
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const btn = el?.closest?.('.cell-btn');
-    if (!btn) return;
-    touchPainting = true;
-    applyToCell(btn, paintVal);
-  }, {passive: true});
-
-  shiftTable.addEventListener('touchmove', (e) => {
-    if (!touchPainting) return;
-    const touch = e.touches[0];
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const btn = el?.closest?.('.cell-btn');
-    if (!btn) return;
-    applyToCell(btn, paintVal);
-  }, {passive: true});
-
-  window.addEventListener('touchend', () => { touchPainting = false; });
-  // ===== ペイント方式 ここまで =====
-</script>
+  </script>
 
 </body>
 </html>
