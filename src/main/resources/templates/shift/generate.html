@@ -259,37 +259,29 @@
 					</th>
 				</tr>
 			</thead>
-			<tbody>
+			<tbody> 
 				<!-- ▼ 1行＝1ユーザー -->
 				<tr th:each="user : ${users != null ? users : {}}">
 					<td class="sticky-col"
 						th:text="${(user != null && user.lastName != null ? user.lastName : '') + ' ' + (user != null && user.firstName != null ? user.firstName : '')}">
-						氏名
-					</td>
-					
-					<!-- key変数をやめて一か所にまとめる -->
-					<td th:each="d : ${dates != null ? dates : {}}" th:with="
-					        dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
-					        val=${shiftMap != null ? #strings.trim(shiftMap[user.id + '_' + dateKey]) : null}
-					    " th:classappend="${!#strings.isEmpty(val) ? val : ''}" th:data-debug-key="${user.id + '_' + dateKey}"
-						th:data-debug-val="${val}">
+						氏名 </td>
 
-						<!-- デバッグ表示 
-						<span th:text="${user.id + '_' + dateKey + ' → ' + (val == null ? 'null' : val)}">debug</span>
-						-->
-						
+					<!-- key変数をやめて一か所にまとめる -->
+					<td th:each="d : ${dates != null ? dates : {}}"
+						th:with=" dateKey=${#temporals.format(d, 'yyyy-MM-dd')}, val=${shiftMap != null ? #strings.trim(shiftMap[user.id + '_' + dateKey]) : null} "
+						th:classappend="${!#strings.isEmpty(val) ? val : ''}"
+						th:data-debug-key="${user.id + '_' + dateKey}" th:data-debug-val="${val}">
+
+						<!-- デバッグ表示 <span th:text="${user.id + '_' + dateKey + ' → ' + (val == null ? 'null' : val)}">debug</span> -->
+
 						<!-- ボタン -->
 						<button type="button" class="cell-btn" th:id="${'btn_' + user.id + '_' + dateKey}"
 							th:data-user-id="${user.id}" th:data-date="${dateKey}"
-							th:text="${!#strings.isEmpty(val) ? val : '-'}">
-						</button>
-
-						<!-- hidden -->
-						<input type="hidden" th:id="${'val_' + user.id + '_' + dateKey}"
+							th:text="${!#strings.isEmpty(val) ? val : '-'}"> </button> <!-- hidden --> <input
+							type="hidden" th:id="${'val_' + user.id + '_' + dateKey}"
 							th:name="${'shifts[' + user.id + '_' + dateKey + ']'}" th:value="${val != null ? val : ''}"
 							th:data-original-value="${val != null ? val : ''}" disabled="disabled" />
 					</td>
-
 				</tr>
 
 				<!-- users が空の場合のフォールバック -->

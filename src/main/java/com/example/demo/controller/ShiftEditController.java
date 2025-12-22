@@ -21,7 +21,7 @@ import com.example.demo.service.ShiftService;
  * - セル削除（クリア）
  *
  * 画面は generate.html（シフト生成画面）から送られてくるフォームを処理する。
- * 保存処理が完了したら PRG パターンで再度 /shift/generate にリダイレクトする。
+ * 保存処理が完了したら PRG パターンで再度 /shift/generate にリダイレクトする。※shiftGenerationController
  *
  * ▼変更点
  * ・フロント側のボタンはすべて /api/shift/request/save にPOSTし、name="action" の値で分岐
@@ -128,55 +128,6 @@ public class ShiftEditController {
         return redirectToGenerate(form, ra);
     }
 
-    /* =========================
-     *  旧：個別エンドポイント群
-     *  （フロントの action 集約に伴い未使用。履歴として残す）
-     * =========================
-
-    /**
-     * 一時保存処理
-     * - 画面で入力されたシフトを DRAFT 状態で保存
-     * /
-    // @PostMapping("/request/draft")
-    // public String saveDraft(ShiftGenerationForm form, RedirectAttributes ra) {
-    //     shiftService.saveShifts(form, Shift.Status.DRAFT);
-    //     ra.addFlashAttribute("notice", "シフトを一時保存しました。");
-    //     return redirectToGenerate(form);
-    // }
-
-    /**
-     * 確定保存処理
-     * - 画面で入力されたシフトを CONFIRMED 状態で保存
-     * /
-    // @PostMapping("/request/confirm")
-    // public String saveConfirm(ShiftGenerationForm form, RedirectAttributes ra) {
-    //     shiftService.saveShifts(form, Shift.Status.CONFIRMED);
-    //     ra.addFlashAttribute("notice", "シフトを確定しました。");
-    //     return redirectToGenerate(form);
-    // }
-
-    /**
-     * 確定解除処理
-     * - 既に CONFIRMED 状態のシフトを DRAFT に戻す
-     * /
-    // @PostMapping("/request/unconfirm")
-    // public String unconfirm(ShiftGenerationForm form, RedirectAttributes ra) {
-    //     shiftService.unconfirmShifts(form);
-    //     ra.addFlashAttribute("notice", "シフトの確定を解除しました。");
-    //     return redirectToGenerate(form);
-    // }
-
-    /**
-     * セル削除処理
-     * - 入力が "-" のセルを DB から削除する
-     * /
-    // @PostMapping("/request/clear")
-    // public String clearShifts(ShiftGenerationForm form, RedirectAttributes ra) {
-    //     shiftService.clearShifts(form);
-    //     ra.addFlashAttribute("notice", "シフトを削除しました。");
-    //     return redirectToGenerate(form);
-    // }
-    */
 
     // 共通：保存後は generate 画面にリダイレクト
     private String redirectToGenerate(ShiftGenerationForm form, RedirectAttributes ra) {

@@ -21,10 +21,11 @@
 <form method="get" th:action="@{/shift/list}">
     <label>部署:</label>
     <select name="department">
-		<option th:each="deptCode : ${departments}"
-		        th:value="${deptCode}"
-		        th:text="${departmentNames[deptCode.toString()]}"
-		        th:selected="${deptCode == department}"></option>
+        <option th:each="deptCode : ${departments}"
+                th:value="${deptCode}"
+                th:text="${departmentNames[deptCode.toString()]}"
+                th:selected="${deptCode == department}">
+        </option>
     </select>
 
     <label>月:</label>
@@ -45,12 +46,18 @@
     <tbody>
         <tr th:each="user : ${users}">
             <td th:text="${user.lastName + ' ' + user.firstName}"></td>
+
+            <!-- ▼ key変数を使わず、直接 user.id + '_' + dateKey で参照 -->
             <td th:each="d : ${dates}"
-                th:with="dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
-                         key=${user.id + '_' + dateKey},
-                         val=${shiftMap != null ? #strings.trim(shiftMap[key]) : null}"
+                th:with="
+                    dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+                    raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
+                    val=${raw != null ? #strings.trim(raw) : null}
+                "
+                th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
                 th:text="${!#strings.isEmpty(val) ? val : '-'}"
-                th:classappend="${!#strings.isEmpty(val) ? val : ''}"></td>
+                th:classappend="${!#strings.isEmpty(val) ? val : ''}">
+            </td>
         </tr>
     </tbody>
 </table>
