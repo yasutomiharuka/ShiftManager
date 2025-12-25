@@ -1,73 +1,118 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
+
 <head>
-    <meta charset="UTF-8">
-    <title>シフト一覧</title>
-    <style>
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ccc; padding: 6px; text-align: center; }
-        .日 { background-color: #e0f7fa; }  /* 水色 */
-        .夜 { background-color: #d1c4e9; }  /* 紫 */
-        .明 { background-color: #ffe0b2; }  /* オレンジ */
-        .休 { background-color: #b3e5fc; }  /* 青 */
-        .有 { background-color: #fff9c4; }  /* 黄色 */
-        .臨\(確\) { background-color: #c8e6c9; }  /* 緑 */
-        .臨\(自\) { background-color: #f0f4c3; }  /* 黄緑 */
-    </style>
+	<meta charset="UTF-8">
+	<title>シフト一覧</title>
+	<style>
+		table {
+			border-collapse: collapse;
+			width: 100%;
+		}
+
+		th,
+		td {
+			border: 1px solid #ccc;
+			padding: 6px;
+			text-align: center;
+		}
+
+		.日 {
+			background-color: #e0f7fa;
+		}
+
+		/* 水色 */
+		.夜 {
+			background-color: #d1c4e9;
+		}
+
+		/* 紫 */
+		.明 {
+			background-color: #ffe0b2;
+		}
+
+		/* オレンジ */
+		.休 {
+			background-color: #b3e5fc;
+		}
+
+		/* 青 */
+		.有 {
+			background-color: #fff9c4;
+		}
+
+		/* 黄色 */
+		.臨\(確\) {
+			background-color: #c8e6c9;
+		}
+
+		/* 緑 */
+		.臨\(自\) {
+			background-color: #f0f4c3;
+		}
+
+		/* 黄緑 */
+	</style>
 </head>
+
 <body>
-<h2 th:text="'シフト一覧（' + ${selectedDepartmentName} + '／' + ${month} + '）'"></h2>
 
-<form method="get" th:action="@{/shift/list}">
-    <label>部署:</label>
-    <select name="department">
-        <option th:each="deptCode : ${departments}"
-                th:value="${deptCode}"
-                th:text="${departmentNames[deptCode.toString()]}"
-                th:selected="${deptCode == department}">
-        </option>
-    </select>
+	<!-- ▼ タイトル：monthLabel は null 時フォールバック -->
+	<h2
+		th:text="|シフト一覧（${selectedDepartmentName != null ? selectedDepartmentName : '部署未選択'}
+		／${monthLabel != null ? monthLabel : '未指定'}）|">
+	</h2>
 
-    <label>月:</label>
-    <input type="month" name="month" th:value="${month}" />
 
-    <button type="submit">表示</button>
-</form>
+	<form method="get" th:action="@{/shift/list}">
+		<label>部署:</label>
+		<select name="department">
+			<option th:each="deptCode : ${departments}" th:value="${deptCode}"
+				th:text="${departmentNames[deptCode.toString()]}" th:selected="${deptCode == department}">
+			</option>
+		</select>
 
-<br/>
+		<label>月:</label>
+		<!-- ▼ input type="month" は yyyy-MM（monthValue） -->
+		<input type="month" name="month" th:value="${monthValue != null ? monthValue : ''}" />
 
-<table>
-    <thead>
-        <tr>
-            <th>職員名</th>
-            <th th:each="d : ${dates}" th:text="${#temporals.format(d, 'M/d')}"></th>
-        </tr>
-    </thead>
-    <tbody>
-        <tr th:each="user : ${users}">
-            <td th:text="${user.lastName + ' ' + user.firstName}"></td>
+		<button type="submit">表示</button>
+	</form>
 
-            <!-- ▼ key変数を使わず、直接 user.id + '_' + dateKey で参照 -->
-            <td th:each="d : ${dates}"
-                th:with="
+	<br />
+
+	<table>
+		<thead>
+			<tr>
+				<th>職員名</th>
+				<th th:each="d : ${dates}" th:text="${#temporals.format(d, 'M/d')}"></th>
+			</tr>
+		</thead>
+		<tbody>
+			<tr th:each="user : ${users}">
+				<td th:text="${user.lastName + ' ' + user.firstName}"></td>
+
+				<!-- ▼ key変数を使わず、直接 user.id + '_' + dateKey で参照 -->
+				<td th:each="d : ${dates}" th:with="
                     dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
                     raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
                     val=${raw != null ? #strings.trim(raw) : null}
-                "
-                th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
-                th:text="${!#strings.isEmpty(val) ? val : '-'}"
-                th:classappend="${!#strings.isEmpty(val) ? val : ''}">
-            </td>
-        </tr>
-    </tbody>
-</table>
+                " th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
+					th:text="${!#strings.isEmpty(val) ? val : '-'}"
+					th:classappend="${!#strings.isEmpty(val) ? val : ''}">
+				</td>
+			</tr>
+		</tbody>
+	</table>
 
-<br>
-<div>
-    <a th:href="@{/shift/generate(department=${department}, month=${month})}">シフト生成画面へ</a> |
-    <a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集画面へ</a> |
-    <a href="/">戻る</a>
-</div>
+	<br>
+	<div>
+		<!-- ▼ リンクの month は yyyy-MM（monthValue）で統一 -->
+		<a th:href="@{/shift/generate(department=${department}, month=${monthValue})}">シフト生成画面へ</a> |
+		<a th:href="@{/shift/edit(department=${department}, month=${monthValue})}">シフト編集画面へ</a> |
+		<a href="/">戻る</a>
+	</div>
 
 </body>
+
 </html>

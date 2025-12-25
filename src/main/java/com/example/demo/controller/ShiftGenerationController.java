@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.IntStream;
@@ -69,6 +70,16 @@ public class ShiftGenerationController {
             YearMonth targetMonth = (month != null) ? month : YearMonth.now();
             System.out.println("▶ 対象月: " + targetMonth);
 
+            // --- 1.5. month を「入力・URL用」と「表示用」に分ける（実務でよくやる） ---
+            // input type="month" は "yyyy-MM" の形式が必要
+            DateTimeFormatter VALUE_FMT = DateTimeFormatter.ofPattern("yyyy-MM");
+            // 見出しなど表示は "yyyy年MM月" が読みやすい
+            DateTimeFormatter LABEL_FMT = DateTimeFormatter.ofPattern("yyyy年MM月");
+
+            String monthValue = targetMonth.format(VALUE_FMT); // 例: 2025-12
+            String monthLabel = targetMonth.format(LABEL_FMT); // 例: 2025年12月
+            System.out.println("▶ monthValue: " + monthValue + " / monthLabel: " + monthLabel);
+
             // --- 2. 月の日付リストを生成（1日〜末日） ---
             List<LocalDate> dates = IntStream.rangeClosed(1, targetMonth.lengthOfMonth())
                     .mapToObj(targetMonth::atDay)
@@ -103,7 +114,13 @@ public class ShiftGenerationController {
             model.addAttribute("users", users);
             model.addAttribute("dates", dates);
             model.addAttribute("department", department);
-            model.addAttribute("month", targetMonth);
+
+            // ★month は衝突しやすい名前なので、用途別に分けて渡す
+            // model.addAttribute("month", targetMonth);
+            model.addAttribute("targetMonth", targetMonth); // 必要ならロジック用（YearMonth）
+            model.addAttribute("monthValue", monthValue);   // input/URL用（yyyy-MM）
+            model.addAttribute("monthLabel", monthLabel);   // 見出し表示用（yyyy年MM月）
+
             model.addAttribute("departments", departmentDisplayMap.keySet());
             model.addAttribute("departmentNames", departmentDisplayMap);
             model.addAttribute("selectedDepartmentName",

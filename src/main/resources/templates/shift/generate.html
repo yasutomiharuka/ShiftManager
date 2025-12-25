@@ -150,11 +150,13 @@
 	<!-- ▼ 一時保存・確定などの結果メッセージ -->
 	<div class="notice" th:if="${notice}" th:text="${notice}"></div>
 
-	<!-- ▼ タイトル：selectedDepartmentName / month はnull時のフォールバックを用意 -->
+	<!-- ▼ タイトル：selectedDepartmentName / monthLabel はnull時のフォールバックを用意（パイプ記法） -->
 	<h2
-		th:text="${(selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択'))} + '／' + (month != null ? month : '未指定') + ' のシフト生成'">
+		th:text="|${selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択')}／
+		${monthLabel != null ? monthLabel : '未指定'} のシフト生成|">
 		シフト生成
 	</h2>
+
 
 	<!-- ▼ データ欠落時の早期案内パネル -->
 	<div class="panel" style="background:#fffde7;" th:if="${(users == null or #lists.isEmpty(users)) 
@@ -168,6 +170,7 @@
                     and (dates == null or #lists.isEmpty(dates))}">／</span>
 			<span th:if="${dates == null or #lists.isEmpty(dates)}">
 				対象月の日付が取得できませんでした（URLの <code>?month=yyyy-MM</code> を確認）。
+				現在の指定：<code th:text="${monthValue}"></code>
 			</span>
 		</div>
 	</div>
@@ -185,13 +188,12 @@
 
 		<label>月:</label>
 		<!-- month は YearMonth を想定。null の場合は空表示 -->
-		<input type="month" name="month" th:value="${month != null ? month : ''}" />
+		<input type="month" name="month" th:value="${monthValue != null ? monthValue : ''}" />
 
 		<button type="submit">表示</button>
 
 		<span class="muted">／ 画面遷移:</span>
-		<a th:href="@{/shift/list(department=${department}, month=${month})}">シフト一覧</a> |
-		<a th:href="@{/shift/edit(department=${department}, month=${month})}">シフト編集</a>
+		<a th:href="@{/shift/list(department=${department}, month=${monthValue})}">シフト一覧</a> |
 	</form>
 
 	<!-- ▼ 入力モード切替（UIのみ） -->
@@ -238,7 +240,7 @@
 
 		<!-- 画面状態の保持：Controller の ShiftGenerationForm / @RequestParam と一致させる -->
 		<input type="hidden" name="department" th:value="${department != null ? department : ''}">
-		<input type="hidden" name="targetMonth" th:value="${month != null ? month : ''}">
+		<input type="hidden" name="targetMonth" th:value="${monthValue != null ? monthValue : ''}">
 		<input type="hidden" id="uiMode" name="uiMode" value="normal">
 
 		<!-- ▼ shiftMap が空なら初期案内 -->
@@ -259,7 +261,7 @@
 					</th>
 				</tr>
 			</thead>
-			<tbody> 
+			<tbody>
 				<!-- ▼ 1行＝1ユーザー -->
 				<tr th:each="user : ${users != null ? users : {}}">
 					<td class="sticky-col"
@@ -365,7 +367,7 @@
 			</button>
 
 			<!-- 戻る -->
-			<a th:href="@{/shift/list(department=${department}, month=${month})}">一覧へ戻る</a>
+			<a th:href="@{/shift/list(department=${department}, month=${monthValue})}">一覧へ戻る</a>
 		</div>
 
 	</form>
