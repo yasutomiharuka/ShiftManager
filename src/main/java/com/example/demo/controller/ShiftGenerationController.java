@@ -16,7 +16,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.demo.dto.UserProfileDto;
 import com.example.demo.form.ShiftGenerationForm;
+import com.example.demo.form.ShiftRequirementForm;          // ★必要人員入力フォーム
 import com.example.demo.service.ShiftGenerationService;
+import com.example.demo.service.ShiftRequirementService;    // ★必要人員サービス
 import com.example.demo.service.ShiftService;
 import com.example.demo.service.UserProfileService;
 
@@ -38,12 +40,18 @@ public class ShiftGenerationController {
     private final UserProfileService userProfileService;
     private final ShiftService shiftService;
 
+    // ★追加：各日付・時間帯ごとの「必要人員」を扱うサービス
+    //   シフト本体（誰が入るか）とは別集約として管理する。
+    private final ShiftRequirementService shiftRequirementService;
+
     public ShiftGenerationController(ShiftGenerationService shiftGenerationService,
                                      UserProfileService userProfileService,
-                                     ShiftService shiftService) {
+                                     ShiftService shiftService,
+                                     ShiftRequirementService shiftRequirementService) { // ★引数追加
         this.shiftGenerationService = shiftGenerationService;
         this.userProfileService = userProfileService;
         this.shiftService = shiftService;
+        this.shiftRequirementService = shiftRequirementService; // ★フィールドに設定
     }
 
     /**
@@ -55,6 +63,10 @@ public class ShiftGenerationController {
      *  - シフトは DRAFT / CONFIRMED の両方を取得し、
      *    「セル単位で最新 or 優先度の高いもの（CONFIRMED > DRAFT）」を
      *    ShiftService#getShiftMap でマージして表示に使用する
+     *
+     *  - 加えて、必要人員（部署×日付×時間帯ごとの人数）を
+     *    ShiftRequirementService から取得し、必要人員入力フォーム
+     *    （ShiftRequirementForm）としてモデルに渡す。
      */
     @GetMapping("/generate")
     public String showGeneratePage(
@@ -110,6 +122,15 @@ public class ShiftGenerationController {
             form.setDepartment(department);
             form.setTargetMonth(targetMonth);
 
+            // --- 6.5 必要人員入力フォームの生成 ---
+            //   【ShiftRequirementForm】
+            //   ・シフト生成画面（generate.html）の「必要人員」入力テーブル用フォーム。
+            //   ・1フォーム = ある部署＋対象月の「日付 × 時間帯ごとの必要人数」を保持する。
+            //   ・ShiftRequirementService#buildForm(...) で
+            //     ShiftRequirement エンティティから初期値を組み立てる。
+            ShiftRequirementForm requirementForm =
+                    shiftRequirementService.buildForm(department, targetMonth);
+
             // --- 7. Thymeleafに渡す値をmodelにセット ---
             model.addAttribute("users", users);
             model.addAttribute("dates", dates);
@@ -127,6 +148,11 @@ public class ShiftGenerationController {
                     departmentDisplayMap.getOrDefault(department, department));
             model.addAttribute("shiftMap", shiftMap);
             model.addAttribute("form", form);
+
+            // ★必要人員入力フォーム（別フォーム）を画面へ渡す
+            //   generate.html 側では th:object="${requirementForm}" として
+            //   「必要人員を保存」ボタン用の <form> から利用する想定。
+            model.addAttribute("requirementForm", requirementForm);
 
             // 可視化用フラグ
             model.addAttribute("noUsers", users == null || users.isEmpty());

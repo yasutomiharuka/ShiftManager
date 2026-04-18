@@ -18,7 +18,6 @@ import com.example.demo.service.ShiftService;
  * - 一時保存（DRAFT）
  * - 確定保存（CONFIRMED）
  * - 確定解除（CONFIRMED → DRAFT）
- * - セル削除（クリア）
  *
  * 画面は generate.html（シフト生成画面）から送られてくるフォームを処理する。
  * 保存処理が完了したら PRG パターンで再度 /shift/generate にリダイレクトする。※shiftGenerationController

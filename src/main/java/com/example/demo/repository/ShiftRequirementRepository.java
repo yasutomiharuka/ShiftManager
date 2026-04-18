@@ -2,19 +2,87 @@ package com.example.demo.repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.example.demo.model.ShiftRequirement;
 
-public interface ShiftRequirementRepository extends JpaRepository<ShiftRequirement, Long> {
+public interface ShiftRequirementRepository extends JpaRepository<ShiftRequirement, Integer> {
+    /*
+     * NOTE:
+     * Entity 側の id は Integer になっているため、本来は JpaRepository<ShiftRequirement, Integer> が整合します。
+     * 現状 Long で運用できているなら大きな問題が顕在化していない可能性もありますが、
+     * 将来的な不具合回避のため、どこかのタイミングで型を揃えることを推奨します。
+     */
 
-    // 特定の日付・部署の要件を取得
+    // ----------------------------------------------------------------------
+    // 参照系（画面表示 / 集計 / バリデーション等で使用）
+    // ----------------------------------------------------------------------
+
+    /**
+     * 特定の日付・部署の要件を取得する。
+     * 例：ある日の必要人員（時間帯別）を取りたいときに使用。
+     */
     List<ShiftRequirement> findByDateAndDepartment(LocalDate date, String department);
 
-    // 部署・月単位（期間）の要件一覧を取得
+    /**
+     * 部署・月単位（期間）の要件一覧を取得する。
+     * 例：generate/list 画面で1ヶ月分の入力値をまとめて表示する際に使用。
+     */
     List<ShiftRequirement> findByDepartmentAndDateBetween(String department, LocalDate startDate, LocalDate endDate);
 
-    // 時間帯で絞り込む
+    /**
+     * 日付・部署・時間帯で絞り込んで取得する。
+     *
+     * 設計上ユニーク制約（date, department, time_slot）が効いている前提なら、本来は 0 or 1 件のはず。
+     * ただし過去データに重複が混入した場合の保険や、ユニーク制約が無い環境用に List のまま残している想定。
+     */
     List<ShiftRequirement> findByDateAndDepartmentAndTimeSlot(LocalDate date, String department, String timeSlot);
+
+    /**
+     * ★アップサート用：部署＋日付＋時間帯の1件を取得する（存在すれば更新、なければ新規）
+     *
+     * Service 側で
+     *   findByDepartmentAndDateAndTimeSlot(...)
+     *     .orElseGet(() -> new ShiftRequirement(...))
+     * の形で利用し、上書き更新（アップサート）を実現する。
+     */
+    Optional<ShiftRequirement> findByDepartmentAndDateAndTimeSlot(String department, LocalDate date, String timeSlot);
+
+    // ----------------------------------------------------------------------
+    // 更新系（確定解除など、一括で状態を変える用途）
+    // ----------------------------------------------------------------------
+
+    /**
+     * 【確定解除（UNCONFIRM）用】
+     * 指定部署・指定月（start〜end）の範囲で、CONFIRMED のレコードを DRAFT に戻す。
+     *
+     * 目的：
+     * - Controller の action=UNCONFIRM に対応
+     * - 「当月・部署の確定データを一括解除して再編集可能にする」
+     *
+     * 注意：
+     * - @Modifying を付けることで UPDATE クエリとして実行されます
+     * - 呼び出し元 Service メソッドには @Transactional を付けてください
+     *
+     * 戻り値：
+     * - 更新された行数（件数）を返す（ログや画面メッセージ判断に使える）
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        update ShiftRequirement r
+           set r.status = com.example.demo.model.ShiftRequirement.Status.DRAFT
+         where r.department = :department
+           and r.date between :startDate and :endDate
+           and r.status = com.example.demo.model.ShiftRequirement.Status.CONFIRMED
+    """)
+    int unconfirmInMonth(
+            @Param("department") String department,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
 }

@@ -151,8 +151,7 @@
 	<div class="notice" th:if="${notice}" th:text="${notice}"></div>
 
 	<!-- ▼ タイトル：selectedDepartmentName / monthLabel はnull時のフォールバックを用意（パイプ記法） -->
-	<h2
-		th:text="|${selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択')}／
+	<h2 th:text="|${selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択')}／
 		${monthLabel != null ? monthLabel : '未指定'} のシフト生成|">
 		シフト生成
 	</h2>
@@ -231,7 +230,7 @@
 		</div>
 	</div>
 
-	<!-- ▼ メイン表（POST 用フォーム） -->
+	<!--	 ▼ メイン表（POST 用フォーム） -->
 	<!--   ※ この form は「一時保存／確定／確定解除／生成」すべて共通で使う -->
 	<form id="generateForm" method="post" th:action="@{/shift/generate}">
 
@@ -302,39 +301,6 @@
 			を押しながらドラッグで一時的クリア
 		</div>
 
-		<br>
-
-		<!-- ▼ 必要人員入力テーブル -->
-		<div class="panel">
-			<strong>必要人員の入力（部署別・時間帯）</strong>
-			<table>
-				<thead>
-					<tr>
-						<th>日付</th>
-						<th>9:00-14:00</th>
-						<th>14:00-16:00</th>
-						<th>16:00-18:00</th>
-						<th>夜間帯</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr th:each="d : ${dates != null ? dates : {}}">
-						<td th:text="${#temporals.format(d, 'M/d')}">M/d</td>
-						<td><input type="number" min="0" th:name="${'requirements[' + d + '_9:00-14:00]'}"></td>
-						<td><input type="number" min="0" th:name="${'requirements[' + d + '_14:00-16:00]'}"></td>
-						<td><input type="number" min="0" th:name="${'requirements[' + d + '_16:00-18:00]'}"></td>
-						<td><input type="number" min="0" th:name="${'requirements[' + d + '_夜間帯]'}"></td>
-					</tr>
-					<tr th:if="${dates == null || #lists.isEmpty(dates)}">
-						<td colspan="5" class="muted">対象月の日付が取得できませんでした。</td>
-					</tr>
-				</tbody>
-			</table>
-			<div class="muted">
-				※ 保存先想定：<code>ShiftRequirement(date / department / timeSlot / requiredCount)</code>
-			</div>
-		</div>
-
 		<!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
 		<div style="display:flex; gap:10px; flex-wrap:wrap;">
 
@@ -371,6 +337,84 @@
 		</div>
 
 	</form>
+
+	<br>
+
+	<!-- ▼ 必要人員入力テーブル -->
+	<form th:action="@{/shift/requirement/save}" th:object="${requirementForm}" method="post">
+
+		<!-- 隠しフィールドで年月・部署を返す -->
+		<input type="hidden" th:field="*{department}">
+		<input type="hidden" th:field="*{year}">
+		<input type="hidden" th:field="*{month}">
+
+		<div class="panel">
+			<strong>必要人員の入力（部署別・時間帯）</strong>
+
+			<table>
+				<thead>
+					<tr>
+						<th>日付</th>
+						<th>9:00-14:00</th>
+						<th>14:00-16:00</th>
+						<th>16:00-18:00</th>
+						<th>夜間帯</th>
+					</tr>
+				</thead>
+
+				<tbody>
+					<tr th:each="d : ${dates}" th:with="dateKey=${#temporals.format(d,'yyyy-MM-dd')}">
+						<td th:text="${#temporals.format(d, 'M/d')}">M/d</td>
+
+						<td>
+							<input type="number" min="0" th:field="*{requiredCounts[__${dateKey + '_09-14'}__]}" />
+						</td>
+
+						<td>
+							<input type="number" min="0" th:field="*{requiredCounts[__${dateKey + '_14-16'}__]}" />
+						</td>
+
+						<td>
+							<input type="number" min="0" th:field="*{requiredCounts[__${dateKey + '_16-18'}__]}" />
+						</td>
+
+						<td>
+							<input type="number" min="0" th:field="*{requiredCounts[__${dateKey + '_NIGHT'}__]}" />
+						</td>
+					</tr>
+
+
+					<tr th:if="${dates == null || #lists.isEmpty(dates)}">
+						<td colspan="5" class="muted">対象月の日付が取得できませんでした。</td>
+					</tr>
+				</tbody>
+			</table>
+
+			<div class="muted">
+				※ 保存先想定：<code>ShiftRequirement(date / department / timeSlot / requiredCount)</code>
+			</div>
+		</div>
+
+		<!-- ▼ 必要人員 操作ボタン群（Shiftと同じ） -->
+		<div style="display:flex; gap:10px; flex-wrap:wrap;">
+			<button type="submit" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
+				value="DRAFT">
+				必要人員：一時保存
+			</button>
+
+			<button type="submit" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
+				value="CONFIRMED">
+				必要人員：確定（生成に反映）
+			</button>
+
+			<button type="submit" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
+				value="UNCONFIRM">
+				必要人員：確定解除
+			</button>
+		</div>
+
+	</form>
+
 
 	<script>
 		// ========== フロント側ロジック ==========
