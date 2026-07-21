@@ -1,33 +1,90 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
-    <title>Home</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ホーム | ShiftManager</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
 </head>
-<body>
-    <h1>ホーム画面</h1>
-	
-	<!-- ログアウト -->
-    <form th:action="@{/logout}" method="post">
-        <!-- CSRFトークンをフォームに含める -->
-        <input type="hidden" name="_csrf" th:value="${_csrf.token}" />
-        <button type="submit">ログアウト</button>
-    </form>
+<body class="app-page">
+    <header class="app-header">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+            <span class="brand__mark" aria-hidden="true">S</span>
+            <span>ShiftManager</span>
+        </a>
+        <form th:action="@{/logout}" action="/logout" method="post">
+            <input type="hidden" name="_csrf" th:value="${_csrf.token}">
+            <button class="logout-button" type="submit">
+                <span aria-hidden="true">↗</span>
+                ログアウト
+            </button>
+        </form>
+    </header>
 
-    <!-- ユーザー登録 -->
-    <form th:action="@{/user/register}" method="get">
-        <button type="submit">ユーザー登録</button>
-    </form>
-	
-	<!-- ユーザー一覧 -->
-	<form th:action="@{/user/list}" method="get">
-	    <button type="submit">ユーザー一覧</button>
-	</form>
-	
-	<!-- シフト一覧 -->
-	<form th:action="@{/shift/list}" method="get">
-	    <button type="submit">シフト一覧</button>
-	</form>
+    <main class="home-main">
+        <section class="welcome" aria-labelledby="home-title">
+            <p class="eyebrow">DASHBOARD</p>
+            <h1 id="home-title">ホーム</h1>
+            <p>利用するメニューを選択してください。</p>
+        </section>
 
+        <section class="menu-section" aria-labelledby="shift-menu-title">
+            <div class="section-heading">
+                <span class="section-heading__number">01</span>
+                <div>
+                    <h2 id="shift-menu-title">シフト管理</h2>
+                    <p>シフトの確認・作成を行います。</p>
+                </div>
+            </div>
+            <div class="menu-grid">
+                <a class="menu-card menu-card--primary" th:href="@{/shift/list}" href="/shift/list">
+                    <span class="menu-card__icon" aria-hidden="true">表</span>
+                    <span class="menu-card__body">
+                        <strong>シフト一覧</strong>
+                        <small>月ごとの勤務シフトを確認</small>
+                    </span>
+                    <span class="menu-card__arrow" aria-hidden="true">→</span>
+                </a>
+                <a class="menu-card" th:href="@{/shift/generate}" href="/shift/generate">
+                    <span class="menu-card__icon" aria-hidden="true">作</span>
+                    <span class="menu-card__body">
+                        <strong>シフト作成</strong>
+                        <small>シフトの入力・自動生成</small>
+                    </span>
+                    <span class="menu-card__arrow" aria-hidden="true">→</span>
+                </a>
+            </div>
+        </section>
 
+        <section class="menu-section" aria-labelledby="user-menu-title">
+            <div class="section-heading">
+                <span class="section-heading__number">02</span>
+                <div>
+                    <h2 id="user-menu-title">ユーザー管理</h2>
+                    <p>職員情報の登録・確認を行います。</p>
+                </div>
+            </div>
+            <div class="menu-grid">
+                <a class="menu-card" th:href="@{/user/list}" href="/user/list">
+                    <span class="menu-card__icon" aria-hidden="true">覧</span>
+                    <span class="menu-card__body">
+                        <strong>ユーザー一覧</strong>
+                        <small>登録済みの職員情報を確認</small>
+                    </span>
+                    <span class="menu-card__arrow" aria-hidden="true">→</span>
+                </a>
+                <a class="menu-card" th:href="@{/user/register}" href="/user/register">
+                    <span class="menu-card__icon" aria-hidden="true">＋</span>
+                    <span class="menu-card__body">
+                        <strong>ユーザー登録</strong>
+                        <small>新しい職員情報を登録</small>
+                    </span>
+                    <span class="menu-card__arrow" aria-hidden="true">→</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">© ShiftManager</footer>
 </body>
 </html>
