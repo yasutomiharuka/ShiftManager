@@ -23,6 +23,27 @@
 		}
 
 		/* 水色 */
+		/* パート・短時間勤務 */
+		.\39 -14 {
+			background-color: #e8f5e9;
+		}
+
+		/* 薄緑 */
+		.\31 4-16 {
+			background-color: #f1f8e9;
+		}
+
+		/* 薄黄緑 */
+		.\31 6-18 {
+			background-color: #fffde7;
+		}
+
+		/* 薄黄色 */
+		.\31 4-18 {
+			background-color: #fff3e0;
+		}
+
+		/* 薄オレンジ */
 		.夜 {
 			background-color: #d1c4e9;
 		}
@@ -205,6 +226,10 @@
 
 		<div class="legend" style="margin-top:8px;">
 			<span class="日">日</span>
+			<span class="9-14">9-14</span>
+			<span class="14-16">14-16</span>
+			<span class="16-18">16-18</span>
+			<span class="14-18">14-18</span>
 			<span class="夜">夜</span>
 			<span class="明">明</span>
 			<span class="休">休</span>
@@ -219,6 +244,10 @@
 		<div class="palette" id="palette">
 			<span>ペイント:</span>
 			<span class="swatch 日 active" data-val="日" data-key="1">日 <span class="kbd">1</span></span>
+			<span class="swatch 9-14" data-val="9-14" data-key="8">9-14 <span class="kbd">8</span></span>
+			<span class="swatch 14-16" data-val="14-16" data-key="9">14-16 <span class="kbd">9</span></span>
+			<span class="swatch 16-18" data-val="16-18" data-key="q">16-18 <span class="kbd">Q</span></span>
+			<span class="swatch 14-18" data-val="14-18" data-key="w">14-18 <span class="kbd">W</span></span>
 			<span class="swatch 夜" data-val="夜" data-key="2">夜 <span class="kbd">2</span></span>
 			<span class="swatch 明" data-val="明" data-key="3">明 <span class="kbd">3</span></span>
 			<span class="swatch 休" data-val="休" data-key="4">休 <span class="kbd">4</span></span>
@@ -293,12 +322,13 @@
 		</table>
 
 		<div class="muted" style="margin-top:6px;">
-			※ 通常モード：<code>日 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
+			※ 通常モード：<code>日 → 9-14 → 14-16 → 16-18 → 14-18 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
 			希望休モード：<code>休 → 有 → -</code>／
 			臨時モード：<code>臨(確) → -</code>
 			<br>
 			※ ペイント：上のパレットで種別選択 → セルをドラッグして塗りつぶし／数字キー <code>1〜7</code> で即変更、<code>0</code> でクリア、<code>Alt</code>
-			を押しながらドラッグで一時的クリア
+			を押しながらドラッグで一時的クリア<br>
+			※ ショートカット：<code>1</code>日、<code>8</code>9-14、<code>9</code>14-16、<code>Q</code>16-18、<code>W</code>14-18
 		</div>
 
 		<!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
@@ -420,7 +450,7 @@
 		// ========== フロント側ロジック ==========
 
 		// 勤務種別の回し方（UI定義）
-		const cycleNormal = ['日', '夜', '明', '休', '有', '臨(確)', '臨(自)', '-'];
+		const cycleNormal = ['日', '9-14', '14-16', '16-18', '14-18', '夜', '明', '休', '有', '臨(確)', '臨(自)', '-'];
 		const cycleRequest = ['休', '有', '-'];
 		const cycleTemp = ['臨(確)', '-'];
 
@@ -498,7 +528,22 @@
 			});
 		}
 
-		const keyMap = {'1': '日', '2': '夜', '3': '明', '4': '休', '5': '有', '6': '臨(確)', '7': '臨(自)', '0': '-'};
+		const keyMap = {
+			'1': '日',
+			'2': '夜',
+			'3': '明',
+			'4': '休',
+			'5': '有',
+			'6': '臨(確)',
+			'7': '臨(自)',
+			'8': '9-14',
+			'9': '14-16',
+			'q': '16-18',
+			'Q': '16-18',
+			'w': '14-18',
+			'W': '14-18',
+			'0': '-'
+		};
 		shiftTable.addEventListener('keydown', (e) => {
 			if (keyMap[e.key]) {
 				const btn = e.target.closest('.cell-btn');

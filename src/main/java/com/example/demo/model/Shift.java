@@ -20,6 +20,9 @@ import jakarta.persistence.UniqueConstraint;
 /**
  * 勤務情報を表すエンティティ。
  * ユーザー、日付、勤務種別、時間帯、所属部署、臨時かどうか、保存状態などを保持する。
+ *
+ * 自動シフト生成では、手入力済みのシフトを上書きしないようにするため、
+ * sourceType により「手入力」か「自動生成」かを判別する。
  */
 @Entity
 @Table(
@@ -55,6 +58,19 @@ public class Shift {
     // 臨時職員が事前に指定されていたかどうか
     private boolean isFixed;
 
+    /**
+     * 入力元区分。
+     *
+     * MANUAL：画面から手入力されたシフト
+     * AUTO：自動生成処理で作成されたシフト
+     *
+     * 自動生成時は MANUAL を上書きせず、
+     * 再生成時は AUTO のみ削除・再作成する。
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", nullable = false, length = 20)
+    private SourceType sourceType = SourceType.MANUAL;
+
     // ===== 保存状態（DRAFT=一時保存, CONFIRMED=確定） =====
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -64,7 +80,7 @@ public class Shift {
     @Column(name = "updated_by", length = 100)
     private String updatedBy;
 
-    // ===== 追加: 最終更新時刻 =====
+    // ===== 最終更新時刻 =====
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
@@ -79,6 +95,14 @@ public class Shift {
     public enum Status {
         DRAFT,      // 一時保存
         CONFIRMED   // 確定（生成に反映）
+    }
+
+    /**
+     * シフトの入力元区分。
+     */
+    public enum SourceType {
+        MANUAL, // 手入力
+        AUTO    // 自動生成
     }
 
     // ===== Getter・Setter =====
@@ -105,6 +129,9 @@ public class Shift {
 
     public boolean isFixed() { return isFixed; }
     public void setFixed(boolean fixed) { isFixed = fixed; }
+
+    public SourceType getSourceType() { return sourceType; }
+    public void setSourceType(SourceType sourceType) { this.sourceType = sourceType; }
 
     public Status getStatus() { return status; }
     public void setStatus(Status status) { this.status = status; }

@@ -26,22 +26,47 @@ public interface ShiftRequirementRepository extends JpaRepository<ShiftRequireme
     /**
      * 特定の日付・部署の要件を取得する。
      * 例：ある日の必要人員（時間帯別）を取りたいときに使用。
+     *
+     * @param date 対象日
+     * @param department 対象部署
+     * @return 条件に一致する必要人員リスト
      */
-    List<ShiftRequirement> findByDateAndDepartment(LocalDate date, String department);
+    List<ShiftRequirement> findByDateAndDepartment(
+            LocalDate date,
+            String department
+    );
 
     /**
      * 部署・月単位（期間）の要件一覧を取得する。
      * 例：generate/list 画面で1ヶ月分の入力値をまとめて表示する際に使用。
+     *
+     * @param department 対象部署
+     * @param startDate 対象期間開始日
+     * @param endDate 対象期間終了日
+     * @return 対象部署・対象期間に一致する必要人員リスト
      */
-    List<ShiftRequirement> findByDepartmentAndDateBetween(String department, LocalDate startDate, LocalDate endDate);
+    List<ShiftRequirement> findByDepartmentAndDateBetween(
+            String department,
+            LocalDate startDate,
+            LocalDate endDate
+    );
 
     /**
      * 日付・部署・時間帯で絞り込んで取得する。
      *
      * 設計上ユニーク制約（date, department, time_slot）が効いている前提なら、本来は 0 or 1 件のはず。
      * ただし過去データに重複が混入した場合の保険や、ユニーク制約が無い環境用に List のまま残している想定。
+     *
+     * @param date 対象日
+     * @param department 対象部署
+     * @param timeSlot 時間帯
+     * @return 条件に一致する必要人員リスト
      */
-    List<ShiftRequirement> findByDateAndDepartmentAndTimeSlot(LocalDate date, String department, String timeSlot);
+    List<ShiftRequirement> findByDateAndDepartmentAndTimeSlot(
+            LocalDate date,
+            String department,
+            String timeSlot
+    );
 
     /**
      * ★アップサート用：部署＋日付＋時間帯の1件を取得する（存在すれば更新、なければ新規）
@@ -50,8 +75,17 @@ public interface ShiftRequirementRepository extends JpaRepository<ShiftRequireme
      *   findByDepartmentAndDateAndTimeSlot(...)
      *     .orElseGet(() -> new ShiftRequirement(...))
      * の形で利用し、上書き更新（アップサート）を実現する。
+     *
+     * @param department 対象部署
+     * @param date 対象日
+     * @param timeSlot 時間帯
+     * @return 条件に一致する必要人員。存在しない場合は Optional.empty()
      */
-    Optional<ShiftRequirement> findByDepartmentAndDateAndTimeSlot(String department, LocalDate date, String timeSlot);
+    Optional<ShiftRequirement> findByDepartmentAndDateAndTimeSlot(
+            String department,
+            LocalDate date,
+            String timeSlot
+    );
 
     // ----------------------------------------------------------------------
     // 更新系（確定解除など、一括で状態を変える用途）
@@ -71,6 +105,11 @@ public interface ShiftRequirementRepository extends JpaRepository<ShiftRequireme
      *
      * 戻り値：
      * - 更新された行数（件数）を返す（ログや画面メッセージ判断に使える）
+     *
+     * @param department 対象部署
+     * @param startDate 対象期間開始日
+     * @param endDate 対象期間終了日
+     * @return 更新された行数
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""

@@ -18,31 +18,43 @@ public interface TemporaryWorkerAssignmentRepository extends JpaRepository<Tempo
 
     /**
      * 特定ユーザーの全臨時勤務予定を取得
+     *
      * @param user 対象ユーザー
      * @return 予定リスト
      */
     List<TemporaryWorkerAssignment> findByUser(UserProfile user);
 
     /**
-     * 特定部署・月の臨時職員予定を取得
+     * 特定部署・対象期間の臨時職員予定を取得
+     *
      * @param department 部署名
-     * @param start 月初
-     * @param end 月末
+     * @param startDate 対象期間開始日
+     * @param endDate 対象期間終了日
      * @return 対象期間の予定一覧
      */
-    List<TemporaryWorkerAssignment> findByDepartmentAndDateBetween(String department, LocalDate start, LocalDate end);
+    List<TemporaryWorkerAssignment> findByDepartmentAndDateBetween(
+            String department,
+            LocalDate startDate,
+            LocalDate endDate
+    );
 
     /**
      * 特定ユーザー・日付・時間帯の予定があるか確認
-     * @param user ユーザー
-     * @param date 日付
+     *
+     * @param user 対象ユーザー
+     * @param date 対象日
      * @param timeSlot 時間帯
-     * @return true = 予定あり
+     * @return true = 予定あり、false = 予定なし
      */
-    boolean existsByUserAndDateAndTimeSlot(UserProfile user, LocalDate date, String timeSlot);
+    boolean existsByUserAndDateAndTimeSlot(
+            UserProfile user,
+            LocalDate date,
+            String timeSlot
+    );
 
     /**
      * 特定ユーザー・日付の予定を削除（取消処理など）
+     *
      * @param user 対象ユーザー
      * @param date 対象日
      */

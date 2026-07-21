@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 
@@ -52,6 +53,36 @@
 		}
 
 		/* 黄緑 */
+
+		/* ▼ 追加：パート・時間帯勤務 */
+		.shift-9-14 {
+			background-color: #e8f5e9;
+		}
+
+		.shift-14-16 {
+			background-color: #f1f8e9;
+		}
+
+		.shift-16-18 {
+			background-color: #fffde7;
+		}
+
+		.shift-14-18 {
+			background-color: #fff3e0;
+		}
+
+		.legend {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+			margin: 12px 0;
+		}
+
+		.legend span {
+			padding: 2px 6px;
+			border: 1px solid #ccc;
+			border-radius: 4px;
+		}
 	</style>
 </head>
 
@@ -81,6 +112,21 @@
 
 	<br />
 
+	<!-- ▼ 追加：凡例 -->
+	<div class="legend">
+		<span class="日">日</span>
+		<span class="shift-9-14">9-14</span>
+		<span class="shift-14-16">14-16</span>
+		<span class="shift-16-18">16-18</span>
+		<span class="shift-14-18">14-18</span>
+		<span class="夜">夜</span>
+		<span class="明">明</span>
+		<span class="休">休</span>
+		<span class="有">有</span>
+		<span class="臨(確)">臨(確)</span>
+		<span class="臨(自)">臨(自)</span>
+	</div>
+
 	<table>
 		<thead>
 			<tr>
@@ -96,10 +142,15 @@
 				<td th:each="d : ${dates}" th:with="
                     dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
                     raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
-                    val=${raw != null ? #strings.trim(raw) : null}
+                    val=${raw != null ? #strings.trim(raw) : null},
+                    shiftClass=${val == '9-14' ? 'shift-9-14' :
+                        (val == '14-16' ? 'shift-14-16' :
+                        (val == '16-18' ? 'shift-16-18' :
+                        (val == '14-18' ? 'shift-14-18' :
+                        (!#strings.isEmpty(val) ? val : ''))))}
                 " th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
 					th:text="${!#strings.isEmpty(val) ? val : '-'}"
-					th:classappend="${!#strings.isEmpty(val) ? val : ''}">
+					th:classappend="${shiftClass}">
 				</td>
 			</tr>
 		</tbody>

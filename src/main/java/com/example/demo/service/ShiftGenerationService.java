@@ -1,11 +1,19 @@
 package com.example.demo.service;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.example.demo.model.Shift;
 import com.example.demo.model.ShiftRequest;
+import com.example.demo.model.ShiftRequirement;
 import com.example.demo.model.UserProfile;
 import com.example.demo.repository.ShiftRepository;
 import com.example.demo.repository.ShiftRequirementRepository;
@@ -19,8 +27,11 @@ public class ShiftGenerationService {
     private final ShiftRequirementRepository shiftRequirementRepository;
     private final ShiftRepository shiftRepository;
     private final TemporaryWorkerAssignmentRepository temporaryWorkerAssignmentRepository;
-    
-    // コンストラクタ　Spring がリポジトリを渡し、フィールドに代入
+
+    /**
+     * コンストラクタ。
+     * Spring が各RepositoryをDIし、フィールドに代入する。
+     */
     public ShiftGenerationService(UserProfileRepository userProfileRepository,
                                   ShiftRequirementRepository shiftRequirementRepository,
                                   TemporaryWorkerAssignmentRepository temporaryWorkerAssignmentRepository,
@@ -31,142 +42,1401 @@ public class ShiftGenerationService {
         this.shiftRepository = shiftRepository;
     }
 
+    // =========================================================
+    // シフト自動生成メイン処理
+    // =========================================================
+
     /**
-     * 指定された年月と部署に対してシフトを自動生成する
-     * ポイント:
-     *  - LocalDate#datesUntil で「日付ストリーム」を作成し、ラムダ内で date が実質finalとなるようにする
-     *  - 1日単位で生成した Shift をまとめて saveAll することで DB I/O を削減（マイクロ最適化）
-     *  - 事前臨時 → 正/パ の順に割当（今は単純な割当。将来はルール拡張想定）
+     * シフト自動生成を実行する。
+     *
+     * 処理概要：
+     * 1. 対象部署・対象月の自動生成済みシフト（AUTO）を削除
+     * 2. 既存シフト・職員・必要人員を取得してContextを作成
+     * 3. 夜勤を自動割当
+     * 4. 自動生成したシフトをAUTOとして保存
+     *
+     * 注意：
+     * ・手入力シフト（MANUAL）は削除・上書きしない
+     * ・現段階では夜勤割当までの実装
+     *
+     * @param department 対象部署
+     * @param targetMonth 対象年月（yyyy-MM）
+     * @return シフト生成結果
      */
-    /*
     @Transactional
-    public void generateShifts(int year, int month, String department) {
-        // ① 対象月の開始日と終了日（末日）を算出
-        LocalDate start = LocalDate.of(year, month, 1);
-        LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+    public ShiftGenerationResult generateComplementShift(String department, String targetMonth) {
 
-        // ② 対象部署のユーザー一覧を取得（正社員・パート・臨時すべて含む想定）
-        //    ※要件に応じて employmentType などで事前に絞ることも可能
-        List<UserProfile> users = userProfileRepository.findByDepartment(department);
+        YearMonth ym = YearMonth.parse(targetMonth);
+        LocalDate startDate = ym.atDay(1);
+        LocalDate endDate = ym.atEndOfMonth();
 
-        // ③ 希望休・有給、必要人員、臨時事前指定を月範囲でまとめて取得 → 日付でグルーピング（N+1 クエリ抑制）
-        Map<LocalDate, List<ShiftRequest>> requestMap =
-                shiftRequestRepository.findByDepartmentAndDateBetween(department, start, end)
-                        .stream()
-                        .collect(Collectors.groupingBy(ShiftRequest::getDate));
-      
+        // 再生成時はAUTOのみ削除する
+        // MANUALは手入力データのため削除しない
+        shiftRepository.deleteByDepartmentAndDateBetweenAndSourceType(
+                department,
+                startDate,
+                endDate,
+                Shift.SourceType.AUTO
+        );
 
-        Map<LocalDate, List<ShiftRequirement>> requirementMap =
-                shiftRequirementRepository.findByDepartmentAndDateBetween(department, start, end)
-                        .stream()
-                        .collect(Collectors.groupingBy(ShiftRequirement::getDate));
+        ShiftGenerationContext context = buildContext(department, targetMonth);
 
-        Map<LocalDate, List<TemporaryWorkerAssignment>> tempMap =
-                temporaryWorkerAssignmentRepository.findByDepartmentAndDateBetween(department, start, end)
-                        .stream()
-                        .collect(Collectors.groupingBy(TemporaryWorkerAssignment::getDate));
+        ShiftGenerationResult result = new ShiftGenerationResult();
 
-        // ④ start〜end（含む）をストリームで走査（datesUntil は上限非包含なので end.plusDays(1)）
-        start.datesUntil(end.plusDays(1)).forEach(date -> {
+     // 現段階では夜勤・日勤・月9休を自動割当
+        assignNightShifts(context, result);
+        assignDayShifts(context, result);
+        assignMonthlyOffDays(context, result);
+        validateMonthlyOffDays(context, result);
 
-            // ④-1 当日分の必要人員（時間帯別）を取得。なければ空リスト
-            List<ShiftRequirement> requirements = requirementMap.getOrDefault(date, List.of());
+        // 自動生成分をDBへ保存
+        saveGeneratedShifts(context, result);
 
-            // ④-2 当日分の希望休・有給リストを一度だけ参照して使い回し（Map 参照の繰り返し回避）
-            List<ShiftRequest> dailyRequests = requestMap.getOrDefault(date, List.of());
+        result.addWarning("現段階では夜勤・日勤時間帯・月9休の自動割当まで実行しました。");
+        
+        return result;
+    }
 
-            // ④-3 本日作成する Shift を一括確保（1日分を saveAll でまとめて保存）
-            List<Shift> shiftsToSaveToday = new ArrayList<>();
-
-            // ④-4 各時間帯の必要人員要件を処理
-            for (ShiftRequirement req : requirements) {
-                // ④-4-1 時間帯・必要人数を取得
-                String slot = req.getTimeSlot();
-                int requiredCount = req.getRequiredCount();
-
-                // ④-4-2 事前割当の臨時職員を当時間帯に絞り込む
-                List<TemporaryWorkerAssignment> tempsForSlot =
-                        tempMap.getOrDefault(date, List.of()).stream()
-                                .filter(t -> slot.equals(t.getTimeSlot()))
-                                .limit(requiredCount) // 必要数を超えないように制限
-                                .toList();
-
-                // ④-4-3 事前臨時を Shift 化（「臨(確)」として保存キューに追加）
-                tempsForSlot.forEach(temp -> {
-                    Shift shift = new Shift();
-                    shift.setUser(temp.getUser());       // 担当者 = 事前指定の臨時
-                    shift.setDate(date);                 // 当日
-                    shift.setDepartment(department);     // 部署
-                    shift.setTimeSlot(slot);             // 時間帯
-                    shift.setShiftType("臨(確)");        // 勤務種別 = 事前確定の臨時
-                    shift.setTemporary(true);            // 臨時フラグ
-                    shift.setFixed(true);                // 事前指定フラグ
-                    shiftsToSaveToday.add(shift);        // 後でまとめて保存
-                });
-
-                // ④-4-4 残りの必要数を算出
-                int remaining = requiredCount - tempsForSlot.size();
-
-                // ④-4-5 残りがあれば、正社員/パートから「勤務可能」な人を抽出して割り当て
-                if (remaining > 0) {
-                    // ここでは簡易に空いている人を上から採用
-                    List<UserProfile> assignCandidates = users.stream()
-                            .filter(u -> isAvailable(u, date, slot, dailyRequests))
-                            .limit(remaining)
-                            .toList();
-
-                    // ④-4-6 候補者を Shift 化（とりあえず「日」勤として割当。将来の拡張ポイント）
-                    assignCandidates.forEach(u -> {
-                        Shift shift = new Shift();
-                        shift.setUser(u);                   // 担当者 = 空いている正/パ
-                        shift.setDate(date);                // 当日
-                        shift.setDepartment(department);    // 部署
-                        shift.setTimeSlot(slot);            // 時間帯
-                        shift.setShiftType("日");           // 仮ロジック：日勤
-                        shift.setTemporary(false);          // 臨時ではない
-                        shift.setFixed(false);              // 事前指定ではない
-                        shiftsToSaveToday.add(shift);       // 後でまとめて保存
-                    });
-                }
-            }
-
-            // ④-5 1日分をまとめて保存（DB I/O を削減）
-            if (!shiftsToSaveToday.isEmpty()) {
-                shiftRepository.saveAll(shiftsToSaveToday);
-            }
-        });
-    }　
-    */
+    // =========================================================
+    // Context作成
+    // =========================================================
 
     /**
-     * 指定ユーザーが指定日・時間帯に勤務可能かを判定
-     * 現状ロジック:
-     *  - 曜日固定休（UserProfile の *Off フラグ）を優先的にブロック
-     *  - 当日の希望休・有給（ShiftRequest）に含まれている場合はブロック
-     *  - ※時間帯の整合や「既に他の時間帯で割当済みか」のチェックは今後の拡張ポイント
+     * シフト生成に必要な情報を取得し、生成用Contextを作成する。
+     *
+     * 取得対象：
+     * ・対象部署
+     * ・対象月
+     * ・対象日付リスト
+     * ・対象職員
+     * ・既存シフト
+     * ・必要人員
+     *
+     * @param department 対象部署
+     * @param targetMonth 対象年月（yyyy-MM）
+     * @return シフト生成用Context
      */
-    private boolean isAvailable(UserProfile user, LocalDate date, String timeSlot, List<ShiftRequest> requests) {
-        // ① 曜日固定休の判定（true なら不可）
-        switch (date.getDayOfWeek()) {
-            case MONDAY    -> { if (Boolean.TRUE.equals(user.getMondayOff()))    return false; }
-            case TUESDAY   -> { if (Boolean.TRUE.equals(user.getTuesdayOff()))   return false; }
-            case WEDNESDAY -> { if (Boolean.TRUE.equals(user.getWednesdayOff())) return false; }
-            case THURSDAY  -> { if (Boolean.TRUE.equals(user.getThursdayOff()))  return false; }
-            case FRIDAY    -> { if (Boolean.TRUE.equals(user.getFridayOff()))    return false; }
-            case SATURDAY  -> { if (Boolean.TRUE.equals(user.getSaturdayOff()))  return false; }
-            case SUNDAY    -> { if (Boolean.TRUE.equals(user.getSundayOff()))    return false; }
+    private ShiftGenerationContext buildContext(String department, String targetMonth) {
+
+        YearMonth ym = YearMonth.parse(targetMonth);
+        LocalDate startDate = ym.atDay(1);
+        LocalDate endDate = ym.atEndOfMonth();
+
+        ShiftGenerationContext context = new ShiftGenerationContext();
+        context.setDepartment(department);
+        context.setTargetMonth(ym);
+
+        // 対象月の日付一覧を作成
+        List<LocalDate> dates = new ArrayList<>();
+        for (LocalDate date = startDate; !date.isAfter(endDate); date = date.plusDays(1)) {
+            dates.add(date);
+        }
+        context.setDates(dates);
+
+        // 対象部署の職員を取得
+        List<UserProfile> users = userProfileRepository.findByDepartment(department);
+        context.setUsers(users);
+
+        // 既存シフトを取得
+        List<Shift> existingShifts =
+                shiftRepository.findByDepartmentAndDateBetween(department, startDate, endDate);
+        context.setExistingShifts(existingShifts);
+
+        // 必要人員を取得
+        List<ShiftRequirement> requirements =
+                shiftRequirementRepository.findByDepartmentAndDateBetween(department, startDate, endDate);
+        context.setRequirements(requirements);
+
+        // ---------------------------------------------------------
+        // TODO:
+        // temporary_worker_assignments テーブル作成後に有効化する
+        //
+        // 現段階では臨時職員の事前指定は使用しないため、空リストを設定する。
+        // ---------------------------------------------------------
+        /*
+        List<TemporaryWorkerAssignment> temporaryAssignments =
+                temporaryWorkerAssignmentRepository.findByDepartmentAndDateBetween(
+                        department,
+                        startDate,
+                        endDate
+                );
+        context.setTemporaryAssignments(temporaryAssignments);
+        */
+
+        context.setTemporaryAssignments(List.of());
+
+        // 生成用シフトマップを初期化
+        // userId -> date -> shiftType
+        Map<Long, Map<LocalDate, String>> scheduleMap = new HashMap<>();
+
+        for (UserProfile user : users) {
+            Map<LocalDate, String> userSchedule = new HashMap<>();
+            for (LocalDate date : dates) {
+                userSchedule.put(date, "");
+            }
+            scheduleMap.put(user.getId(), userSchedule);
         }
 
-        // ② 希望休・有給の判定（当日そのユーザーが何らかの申請をしていれば不可）
-        //    ※将来的に timeSlot 別の有給/半休 等が入る場合は、timeSlot での突合に変更してください
+        // 手入力など、自動生成で上書きしてはいけないセルを管理するMap
+        // key = userId_yyyy-MM-dd
+        Map<String, Boolean> lockedMap = new HashMap<>();
+
+        // 既存シフトを生成用マップへ反映
+        for (Shift shift : existingShifts) {
+            if (shift.getUser() == null || shift.getDate() == null) {
+                continue;
+            }
+
+            Long userId = shift.getUser().getId();
+            LocalDate date = shift.getDate();
+
+            if (!scheduleMap.containsKey(userId)) {
+                continue;
+            }
+
+            scheduleMap.get(userId).put(date, shift.getShiftType());
+
+            String key = userId + "_" + date;
+
+            // MANUALは手入力シフトのため、自動生成で上書きしない
+            if (shift.getSourceType() == Shift.SourceType.MANUAL) {
+                lockedMap.put(key, true);
+            }
+        }
+
+        context.setScheduleMap(scheduleMap);
+        context.setLockedMap(lockedMap);
+
+        return context;
+    }
+
+    // =========================================================
+    // 夜勤割当処理
+    // =========================================================
+
+    /**
+     * 夜勤を自動割当する。
+     *
+     * ルール：
+     * ・夜勤は1日2人
+     * ・1人あたり月4回まで
+     * ・夜の翌日は明
+     * ・明の翌日は原則休
+     * ・手入力セルは上書きしない
+     *
+     * @param context シフト生成用Context
+     * @param result シフト生成結果
+     */
+    private void assignNightShifts(ShiftGenerationContext context, ShiftGenerationResult result) {
+
+        for (LocalDate date : context.getDates()) {
+
+            int currentNightCount = countShiftTypeOnDate(context, date, "夜");
+
+            while (currentNightCount < 2) {
+
+                UserProfile candidate = findNightCandidate(context, date);
+
+                if (candidate == null) {
+                    result.addWarning(date + " の夜勤候補者が不足しています。");
+                    break;
+                }
+
+                Long userId = candidate.getId();
+
+                // 当日：夜
+                setAutoShift(context, userId, date, "夜");
+
+                // 翌日：明
+                LocalDate nextDate = date.plusDays(1);
+                if (context.getDates().contains(nextDate)) {
+                    if (isLocked(context, userId, nextDate)) {
+                        result.addWarning(candidate.getLastName() + " " + candidate.getFirstName()
+                                + " さんの " + nextDate + " は手入力済みのため、明を設定できませんでした。");
+                    } else {
+                        setAutoShift(context, userId, nextDate, "明");
+                    }
+                }
+
+                // 翌々日：休
+                LocalDate afterNextDate = date.plusDays(2);
+                if (context.getDates().contains(afterNextDate)) {
+                    if (isLocked(context, userId, afterNextDate)) {
+                        result.addWarning(candidate.getLastName() + " " + candidate.getFirstName()
+                                + " さんの " + afterNextDate + " は手入力済みのため、休を設定できませんでした。");
+                    } else {
+                        setAutoShift(context, userId, afterNextDate, "休");
+                    }
+                }
+
+                currentNightCount++;
+            }
+        }
+    }
+
+    /**
+     * 指定日に夜勤を割当可能な職員を1人返す。
+     *
+     * @param context シフト生成用Context
+     * @param date 対象日
+     * @return 夜勤候補者。候補者がいない場合はnull
+     */
+    private UserProfile findNightCandidate(ShiftGenerationContext context, LocalDate date) {
+
+        UserProfile bestCandidate = null;
+        int bestScore = Integer.MIN_VALUE;
+
+        for (UserProfile user : context.getUsers()) {
+
+            // パート勤務者は夜勤候補から除外する
+            // canAssignNightShift() でも除外しているが、候補抽出段階でも除外して二重に防止する
+            if (isPartTimeUser(user)) {
+                continue;
+            }
+
+            if (!canAssignNightShift(context, user, date)) {
+                continue;
+            }
+
+            int score = scoreNightCandidate(context, user, date);
+
+            if (score > bestScore) {
+                bestScore = score;
+                bestCandidate = user;
+            }
+        }
+
+        return bestCandidate;
+    }
+
+    /**
+     * 指定ユーザーに夜勤を割当可能か判定する。
+     *
+     * @param context シフト生成用Context
+     * @param user 対象職員
+     * @param date 対象日
+     * @return true = 割当可能、false = 割当不可
+     */
+    private boolean canAssignNightShift(ShiftGenerationContext context, UserProfile user, LocalDate date) {
+
+        Long userId = user.getId();
+
+        // パート勤務者は曜日ごとの時間帯勤務として扱うため、夜勤の自動割当対象から外す
+        if (isPartTimeUser(user)) {
+            return false;
+        }
+
+        if (isLocked(context, userId, date)) {
+            return false;
+        }
+
+        if (!isBlank(context, userId, date)) {
+            return false;
+        }
+
+        if (countMonthlyShiftType(context, userId, "夜") >= 4) {
+            return false;
+        }
+
+        LocalDate nextDate = date.plusDays(1);
+        if (context.getDates().contains(nextDate) && isLocked(context, userId, nextDate)) {
+            return false;
+        }
+
+        LocalDate afterNextDate = date.plusDays(2);
+        if (context.getDates().contains(afterNextDate) && isLocked(context, userId, afterNextDate)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 夜勤候補者の評価スコアを計算する。
+     *
+     * @param context シフト生成用Context
+     * @param user 対象職員
+     * @param date 対象日
+     * @return 評価スコア
+     */
+    private int scoreNightCandidate(ShiftGenerationContext context, UserProfile user, LocalDate date) {
+
+        Long userId = user.getId();
+        int score = 0;
+
+        // 夜勤回数が少ない人を優先
+        int nightCount = countMonthlyShiftType(context, userId, "夜");
+        score += (4 - nightCount) * 10;
+
+        // 勤務回数が多い人はやや優先度を下げる
+        int workCount = countMonthlyWorkDays(context, userId);
+        score -= workCount;
+
+        // 翌日「明」が置きやすい場合は加点
+        LocalDate nextDate = date.plusDays(1);
+        if (context.getDates().contains(nextDate) && isBlank(context, userId, nextDate)) {
+            score += 10;
+        }
+
+        // 翌々日「休」が置きやすい場合は加点
+        LocalDate afterNextDate = date.plusDays(2);
+        if (context.getDates().contains(afterNextDate) && isBlank(context, userId, afterNextDate)) {
+            score += 5;
+        }
+
+        return score;
+    }
+    
+ // =========================================================
+ // 日勤割当処理
+ // =========================================================
+
+ /**
+  * 必要人員を考慮して日勤を自動割当する。
+  *
+  * ルール：
+  * ・9-14 / 14-16 / 16-18 の必要人員を確認する
+  * ・既存の日勤、パート勤務を時間帯別にカウントする
+  * ・不足している時間帯がある場合のみ日勤または時間帯勤務を追加する
+  * ・正社員の日勤は「日」として保存し、9-14 / 14-16 / 16-18 の全時間帯に1人としてカウントする
+  * ・パート勤務は職員ごとの曜日別勤務時間に応じて「9-14」「14-16」「16-18」「14-18」などで保存する
+  * ・手入力セルは上書きしない
+  * ・夜・明・休・有は上書きしない
+  * ・日勤は4連続まで許可し、5連続以上になる場合は割当しない
+  *
+  * @param context シフト生成用Context
+  * @param result シフト生成結果
+  */
+ private void assignDayShifts(ShiftGenerationContext context, ShiftGenerationResult result) {
+
+     for (LocalDate date : context.getDates()) {
+
+         Map<String, Integer> shortageMap = calculateShortageByTimeSlot(context, date);
+
+         while (hasDayTimeShortage(shortageMap)) {
+
+             UserProfile candidate = findDayCandidate(context, date, shortageMap);
+
+             if (candidate == null) {
+                 result.addWarning(date + " の日勤候補者が不足しています。必要人員を満たせない時間帯があります。");
+                 break;
+             }
+
+             String shiftType = resolveAutoDayShiftType(candidate, date);
+             setAutoShift(context, candidate.getId(), date, shiftType);
+
+             // 日勤または時間帯勤務を1人追加したため、時間帯別の不足人数を再計算する
+             shortageMap = calculateShortageByTimeSlot(context, date);
+         }
+     }
+ }
+
+ /**
+  * 指定日に日勤を割当可能な職員を1人返す。
+  *
+  * @param context シフト生成用Context
+  * @param date 対象日
+  * @return 日勤候補者。候補者がいない場合はnull
+  */
+ private UserProfile findDayCandidate(
+         ShiftGenerationContext context,
+         LocalDate date,
+         Map<String, Integer> shortageMap) {
+
+     UserProfile bestCandidate = null;
+     int bestScore = Integer.MIN_VALUE;
+
+     for (UserProfile user : context.getUsers()) {
+
+         if (!canAssignDayShift(context, user, date)) {
+             continue;
+         }
+
+         if (!canCoverDayTimeShortage(user, date, shortageMap)) {
+             continue;
+         }
+
+         int score = scoreDayCandidate(context, user, date);
+
+         if (score > bestScore) {
+             bestScore = score;
+             bestCandidate = user;
+         }
+     }
+
+     return bestCandidate;
+ }
+
+ /**
+  * 指定ユーザーに日勤を割当可能か判定する。
+  *
+  * @param context シフト生成用Context
+  * @param user 対象職員
+  * @param date 対象日
+  * @return true = 割当可能、false = 割当不可
+  */
+ private boolean canAssignDayShift(ShiftGenerationContext context, UserProfile user, LocalDate date) {
+
+     Long userId = user.getId();
+
+     // 手入力セルは上書きしない
+     if (isLocked(context, userId, date)) {
+         return false;
+     }
+
+     // 既に夜・明・休・有・日・9-14などが入っている場合は対象外
+     if (!isBlank(context, userId, date)) {
+         return false;
+     }
+
+     // パート勤務者は、対象曜日に勤務時間が設定されている場合のみ割当対象にする
+     if (isPartTimeUser(user) && !canAssignPartTimeByWeekday(user, date)) {
+         return false;
+     }
+
+     // 日勤5連続になる場合は不可
+     if (willExceedMaxConsecutiveDayShift(context, userId, date)) {
+         return false;
+     }
+
+     return true;
+ }
+
+ /**
+  * 自動生成する日勤系の勤務区分を返す。
+  *
+  * ルール：
+  * ・正社員は「日」として保存する
+  * ・パート勤務は、職員ごとの曜日別勤務時間から勤務区分を判定して保存する
+  *
+  * 判定例：
+  * ・9:00 ～ 14:00  -> 9-14
+  * ・14:00 ～ 16:00 -> 14-16
+  * ・16:00 ～ 18:00 -> 16-18
+  * ・14:00 ～ 18:00 -> 14-18
+  * ・9:00 ～ 18:00  -> 日
+  *
+  * 注意：
+  * ・UserProfileのgetter名が異なる場合に備え、複数のgetter名を試す
+  * ・勤務時間を取得できない場合は、暫定で「9-14」として扱う
+  */
+ private String resolveAutoDayShiftType(UserProfile user, LocalDate date) {
+
+     if (!isPartTimeUser(user)) {
+         return "日";
+     }
+
+     String shiftType = resolvePartTimeShiftTypeByWeekday(user, date);
+
+     if (shiftType == null || shiftType.isBlank()) {
+         return "9-14";
+     }
+
+     return shiftType;
+ }
+
+ /**
+  * 対象職員がパート勤務か判定する。
+  *
+  * employmentType の表記ゆれに対応するため、
+  * 「パート」を含む場合はパート扱いにする。
+  */
+ private boolean isPartTimeUser(UserProfile user) {
+
+	    if (user == null) {
+	        return false;
+	    }
+
+	    String employmentType = user.getEmploymentType();
+
+	    if (employmentType == null) {
+	        return false;
+	    }
+
+	    employmentType = employmentType.trim();
+
+	    if (employmentType.isBlank()) {
+	        return false;
+	    }
+
+	    String normalized = employmentType
+	            .replace("_", "")
+	            .replace("-", "")
+	            .replace(" ", "")
+	            .toLowerCase();
+
+	    return employmentType.contains("パート")
+	            || "part".equals(normalized)
+	            || "parttime".equals(normalized);
+	}
+
+ /**
+  * パート勤務者について、対象曜日に勤務可能か判定する。
+  *
+  * 判定条件：
+  * ・対象曜日の休みフラグがtrueではない
+  * ・対象曜日の開始時間・終了時間から勤務区分を判定できる
+  */
+ private boolean canAssignPartTimeByWeekday(UserProfile user, LocalDate date) {
+
+     if (isFixedOffDay(user, date)) {
+         return false;
+     }
+
+     String shiftType = resolvePartTimeShiftTypeByWeekday(user, date);
+
+     return shiftType != null && !shiftType.isBlank();
+ }
+
+ /**
+  * UserProfileに設定されている曜日別休みフラグを確認する。
+  */
+ private boolean isFixedOffDay(UserProfile user, LocalDate date) {
+
+     return switch (date.getDayOfWeek()) {
+         case MONDAY -> Boolean.TRUE.equals(user.getMondayOff());
+         case TUESDAY -> Boolean.TRUE.equals(user.getTuesdayOff());
+         case WEDNESDAY -> Boolean.TRUE.equals(user.getWednesdayOff());
+         case THURSDAY -> Boolean.TRUE.equals(user.getThursdayOff());
+         case FRIDAY -> Boolean.TRUE.equals(user.getFridayOff());
+         case SATURDAY -> Boolean.TRUE.equals(user.getSaturdayOff());
+         case SUNDAY -> Boolean.TRUE.equals(user.getSundayOff());
+     };
+ }
+
+ /**
+  * 曜日ごとの勤務開始・終了時間から、パート勤務の勤務区分を返す。
+  *
+  * UserProfileでは勤務開始・終了時間がStringで保持されているため、
+  * 曜日ごとのgetterから取得してLocalTimeへ変換する。
+  */
+ private String resolvePartTimeShiftTypeByWeekday(UserProfile user, LocalDate date) {
+
+     String startText;
+     String endText;
+
+     switch (date.getDayOfWeek()) {
+         case MONDAY -> {
+             startText = user.getMondayStartTime();
+             endText = user.getMondayEndTime();
+         }
+         case TUESDAY -> {
+             startText = user.getTuesdayStartTime();
+             endText = user.getTuesdayEndTime();
+         }
+         case WEDNESDAY -> {
+             startText = user.getWednesdayStartTime();
+             endText = user.getWednesdayEndTime();
+         }
+         case THURSDAY -> {
+             startText = user.getThursdayStartTime();
+             endText = user.getThursdayEndTime();
+         }
+         case FRIDAY -> {
+             startText = user.getFridayStartTime();
+             endText = user.getFridayEndTime();
+         }
+         case SATURDAY -> {
+             startText = user.getSaturdayStartTime();
+             endText = user.getSaturdayEndTime();
+         }
+         case SUNDAY -> {
+             startText = user.getSundayStartTime();
+             endText = user.getSundayEndTime();
+         }
+         default -> {
+             return null;
+         }
+     }
+
+     LocalTime startTime = parseLocalTime(startText);
+     LocalTime endTime = parseLocalTime(endText);
+
+     return toShiftTypeByTimeRange(startTime, endTime);
+ }
+
+ /**
+  * String型の時刻をLocalTimeへ変換する。
+  *
+  * 対応例：
+  * ・09:00
+  * ・9:00
+  * ・09:00:00
+  */
+ private LocalTime parseLocalTime(String value) {
+
+     if (value == null || value.isBlank()) {
+         return null;
+     }
+
+     String normalized = value.trim();
+
+     try {
+         return LocalTime.parse(normalized);
+     } catch (RuntimeException e) {
+         // 9:00 のように時が1桁の場合は 09:00 に補正する
+         try {
+             if (normalized.length() == 4) {
+                 return LocalTime.parse("0" + normalized);
+             }
+         } catch (RuntimeException ignored) {
+             return null;
+         }
+     }
+
+     return null;
+ }
+
+ /**
+  * 勤務開始・終了時間からshift_typeを判定する。
+  */
+ private String toShiftTypeByTimeRange(LocalTime startTime, LocalTime endTime) {
+
+     if (startTime == null || endTime == null) {
+         return null;
+     }
+
+     if (isSameTime(startTime, 9, 0) && isSameTime(endTime, 14, 0)) {
+         return "9-14";
+     }
+
+     if (isSameTime(startTime, 14, 0) && isSameTime(endTime, 16, 0)) {
+         return "14-16";
+     }
+
+     if (isSameTime(startTime, 16, 0) && isSameTime(endTime, 18, 0)) {
+         return "16-18";
+     }
+
+     if (isSameTime(startTime, 14, 0) && isSameTime(endTime, 18, 0)) {
+         return "14-18";
+     }
+
+     if (isSameTime(startTime, 9, 0) && isSameTime(endTime, 18, 0)) {
+         return "日";
+     }
+
+     // 上記にない勤務時間は、必要人員の対象時間帯に重なる範囲で近い区分に寄せる
+     boolean coversMorning = !startTime.isAfter(LocalTime.of(9, 0)) && !endTime.isBefore(LocalTime.of(14, 0));
+     boolean coversEarlyAfternoon = !startTime.isAfter(LocalTime.of(14, 0)) && !endTime.isBefore(LocalTime.of(16, 0));
+     boolean coversLateAfternoon = !startTime.isAfter(LocalTime.of(16, 0)) && !endTime.isBefore(LocalTime.of(18, 0));
+
+     if (coversMorning && coversEarlyAfternoon && coversLateAfternoon) {
+         return "日";
+     }
+
+     if (coversEarlyAfternoon && coversLateAfternoon) {
+         return "14-18";
+     }
+
+     if (coversMorning) {
+         return "9-14";
+     }
+
+     if (coversEarlyAfternoon) {
+         return "14-16";
+     }
+
+     if (coversLateAfternoon) {
+         return "16-18";
+     }
+
+     return null;
+ }
+
+ /**
+  * 時・分が一致するか判定する。
+  */
+ private boolean isSameTime(LocalTime time, int hour, int minute) {
+     return time.getHour() == hour && time.getMinute() == minute;
+ }
+
+ /**
+  * 対象職員の自動生成勤務区分で、現在の不足時間帯を埋められるか判定する。
+  *
+  * 例：
+  * ・正社員の「日」は、9-14 / 14-16 / 16-18 の不足を埋められる
+  * ・パートは職員ごとの勤務時間で埋められる不足時間帯がある場合のみ割当対象にする
+  */
+ private boolean canCoverDayTimeShortage(UserProfile user, LocalDate date, Map<String, Integer> shortageMap) {
+
+     String shiftType = resolveAutoDayShiftType(user, date);
+
+     return switch (shiftType) {
+         case "日" -> hasDayTimeShortage(shortageMap);
+         case "9-14" -> shortageMap.getOrDefault("9-14", 0) > 0;
+         case "14-16" -> shortageMap.getOrDefault("14-16", 0) > 0;
+         case "16-18" -> shortageMap.getOrDefault("16-18", 0) > 0;
+         case "14-18" -> shortageMap.getOrDefault("14-16", 0) > 0
+                 || shortageMap.getOrDefault("16-18", 0) > 0;
+         default -> false;
+     };
+ }
+
+ /**
+  * 日勤候補者の評価スコアを計算する。
+  *
+  * @param context シフト生成用Context
+  * @param user 対象職員
+  * @param date 対象日
+  * @return 評価スコア
+  */
+ private int scoreDayCandidate(ShiftGenerationContext context, UserProfile user, LocalDate date) {
+
+     Long userId = user.getId();
+     int score = 0;
+
+     // 必要人員の不足を埋められる勤務区分を優先
+     Map<String, Integer> shortageMap = calculateShortageByTimeSlot(context, date);
+     int coverageCount = countCoveredShortageByShiftType(resolveAutoDayShiftType(user, date), shortageMap);
+     score += coverageCount * 30;
+
+     // 勤務回数が少ない人を優先
+     int workCount = countMonthlyWorkDays(context, userId);
+     score += Math.max(0, 30 - workCount);
+
+     // 連勤が少ない人を優先
+     int consecutiveDays = countConsecutiveDayShiftAround(context, userId, date);
+     score += Math.max(0, 10 - consecutiveDays);
+
+     // 4連続になる場合は許可するが、優先度を少し下げる
+     if (consecutiveDays == 4) {
+         score -= 10;
+     }
+
+     // 夜勤回数が多い人は日勤優先度を少し下げる
+     int nightCount = countMonthlyShiftType(context, userId, "夜");
+     score -= nightCount * 2;
+
+     return score;
+ }
+
+ /**
+  * 勤務区分ごとに、不足時間帯をいくつ埋められるかを返す。
+  */
+ private int countCoveredShortageByShiftType(String shiftType, Map<String, Integer> shortageMap) {
+
+     int count = 0;
+
+     switch (shiftType) {
+         case "日" -> {
+             if (shortageMap.getOrDefault("9-14", 0) > 0) count++;
+             if (shortageMap.getOrDefault("14-16", 0) > 0) count++;
+             if (shortageMap.getOrDefault("16-18", 0) > 0) count++;
+         }
+         case "9-14" -> {
+             if (shortageMap.getOrDefault("9-14", 0) > 0) count++;
+         }
+         case "14-16" -> {
+             if (shortageMap.getOrDefault("14-16", 0) > 0) count++;
+         }
+         case "16-18" -> {
+             if (shortageMap.getOrDefault("16-18", 0) > 0) count++;
+         }
+         case "14-18" -> {
+             if (shortageMap.getOrDefault("14-16", 0) > 0) count++;
+             if (shortageMap.getOrDefault("16-18", 0) > 0) count++;
+         }
+         default -> {
+             // 対象外
+         }
+     }
+
+     return count;
+ }
+
+ /**
+  * 指定日の時間帯別の不足人数を算出する。
+  *
+  * 対象時間帯：
+  * ・9-14
+  * ・14-16
+  * ・16-18
+  *
+  * @param context シフト生成用Context
+  * @param date 対象日
+  * @return timeSlot -> 不足人数
+  */
+ private Map<String, Integer> calculateShortageByTimeSlot(
+         ShiftGenerationContext context,
+         LocalDate date) {
+
+     Map<String, Integer> requiredMap = getRequiredCountByTimeSlot(context, date);
+     Map<String, Integer> assignedMap = countAssignedCountByTimeSlot(context, date);
+
+     Map<String, Integer> shortageMap = new HashMap<>();
+     shortageMap.put("9-14", Math.max(0,
+             requiredMap.getOrDefault("9-14", 0) - assignedMap.getOrDefault("9-14", 0)));
+     shortageMap.put("14-16", Math.max(0,
+             requiredMap.getOrDefault("14-16", 0) - assignedMap.getOrDefault("14-16", 0)));
+     shortageMap.put("16-18", Math.max(0,
+             requiredMap.getOrDefault("16-18", 0) - assignedMap.getOrDefault("16-18", 0)));
+
+     return shortageMap;
+ }
+
+ /**
+  * 指定日の必要人員を時間帯別に取得する。
+  *
+  * ShiftRequirementの想定：
+  * ・date
+  * ・timeSlot
+  * ・requiredCount
+  */
+ private Map<String, Integer> getRequiredCountByTimeSlot(
+         ShiftGenerationContext context,
+         LocalDate date) {
+
+     Map<String, Integer> requiredMap = new HashMap<>();
+     requiredMap.put("9-14", 0);
+     requiredMap.put("14-16", 0);
+     requiredMap.put("16-18", 0);
+
+     for (ShiftRequirement requirement : context.getRequirements()) {
+
+         if (requirement.getDate() == null || !requirement.getDate().equals(date)) {
+             continue;
+         }
+
+         String timeSlot = requirement.getTimeSlot();
+         Integer requiredCount = requirement.getRequiredCount();
+
+         if (timeSlot == null || requiredCount == null) {
+             continue;
+         }
+
+         if (requiredMap.containsKey(timeSlot)) {
+             requiredMap.put(timeSlot, requiredCount);
+         }
+     }
+
+     return requiredMap;
+ }
+
+ /**
+  * 指定日の割当済み人数を時間帯別に集計する。
+  *
+  * カウントルール：
+  * ・日     -> 9-14 / 14-16 / 16-18 に1人ずつカウント
+  * ・9-14  -> 9-14 に1人カウント
+  * ・14-16 -> 14-16 に1人カウント
+  * ・16-18 -> 16-18 に1人カウント
+  * ・14-18 -> 14-16 / 16-18 に1人ずつカウント
+  */
+ private Map<String, Integer> countAssignedCountByTimeSlot(
+         ShiftGenerationContext context,
+         LocalDate date) {
+
+     Map<String, Integer> assignedMap = new HashMap<>();
+     assignedMap.put("9-14", 0);
+     assignedMap.put("14-16", 0);
+     assignedMap.put("16-18", 0);
+
+     for (UserProfile user : context.getUsers()) {
+
+         String shiftType = getShiftType(context, user.getId(), date);
+
+         if (shiftType == null || shiftType.isBlank()) {
+             continue;
+         }
+
+         addAssignedCountByShiftType(assignedMap, shiftType);
+     }
+
+     return assignedMap;
+ }
+
+ /**
+  * 勤務区分に応じて、該当する時間帯の割当人数を加算する。
+  */
+ private void addAssignedCountByShiftType(Map<String, Integer> assignedMap, String shiftType) {
+
+     switch (shiftType) {
+         case "日" -> {
+             assignedMap.merge("9-14", 1, Integer::sum);
+             assignedMap.merge("14-16", 1, Integer::sum);
+             assignedMap.merge("16-18", 1, Integer::sum);
+         }
+         case "9-14" -> assignedMap.merge("9-14", 1, Integer::sum);
+         case "14-16" -> assignedMap.merge("14-16", 1, Integer::sum);
+         case "16-18" -> assignedMap.merge("16-18", 1, Integer::sum);
+         case "14-18" -> {
+             assignedMap.merge("14-16", 1, Integer::sum);
+             assignedMap.merge("16-18", 1, Integer::sum);
+         }
+         default -> {
+             // 夜・明・休・有・臨などは日勤時間帯の必要人員にはカウントしない
+         }
+     }
+ }
+
+ /**
+  * 日勤時間帯に不足があるか判定する。
+  */
+ private boolean hasDayTimeShortage(Map<String, Integer> shortageMap) {
+     return shortageMap.getOrDefault("9-14", 0) > 0
+             || shortageMap.getOrDefault("14-16", 0) > 0
+             || shortageMap.getOrDefault("16-18", 0) > 0;
+ }
+
+ /**
+  * 対象日に日勤を入れた場合、日勤5連続以上になるか判定する。
+  *
+  * ルール：
+  * ・4連続まではOK
+  * ・5連続以上は不可
+  */
+ private boolean willExceedMaxConsecutiveDayShift(
+         ShiftGenerationContext context,
+         Long userId,
+         LocalDate targetDate) {
+
+     int consecutive = 1;
+
+     // 前方向に連続日勤を数える
+     LocalDate prev = targetDate.minusDays(1);
+     while (context.getDates().contains(prev) && isDayTimeShiftType(getShiftType(context, userId, prev))) {
+         consecutive++;
+         prev = prev.minusDays(1);
+     }
+
+     // 後方向に連続日勤を数える
+     LocalDate next = targetDate.plusDays(1);
+     while (context.getDates().contains(next) && isDayTimeShiftType(getShiftType(context, userId, next))) {
+         consecutive++;
+         next = next.plusDays(1);
+     }
+
+     return consecutive >= 5;
+ }
+
+ /**
+  * 対象日に日勤を入れた場合の前後の日勤連続数を返す。
+  */
+ private int countConsecutiveDayShiftAround(
+         ShiftGenerationContext context,
+         Long userId,
+         LocalDate targetDate) {
+
+     int consecutive = 1;
+
+     LocalDate prev = targetDate.minusDays(1);
+     while (context.getDates().contains(prev) && isDayTimeShiftType(getShiftType(context, userId, prev))) {
+         consecutive++;
+         prev = prev.minusDays(1);
+     }
+
+     LocalDate next = targetDate.plusDays(1);
+     while (context.getDates().contains(next) && isDayTimeShiftType(getShiftType(context, userId, next))) {
+         consecutive++;
+         next = next.plusDays(1);
+     }
+
+     return consecutive;
+ }
+
+//=========================================================
+//月9休割当処理
+//=========================================================
+
+/**
+* 月9休を満たすように休を自動割当する。
+*
+* ルール：
+* ・休のみを休日日数としてカウントする
+* ・有給、有、明は休日日数に含めない
+* ・MANUALは上書きしない
+* ・空欄またはAUTOの日勤のみ休へ変更可能
+*
+* @param context シフト生成用Context
+* @param result シフト生成結果
+*/
+private void assignMonthlyOffDays(ShiftGenerationContext context, ShiftGenerationResult result) {
+
+  for (UserProfile user : context.getUsers()) {
+      Long userId = user.getId();
+
+      int offCount = countMonthlyOffDays(context, userId);
+
+      while (offCount < 9) {
+
+          LocalDate candidateDate = findBestOffCandidateDate(context, user);
+
+          if (candidateDate == null) {
+              result.addWarning(user.getLastName() + " " + user.getFirstName()
+                      + " さんは休み候補日が不足しているため、月9休を満たせませんでした。現在の休数: " + offCount);
+              break;
+          }
+
+          setAutoShift(context, userId, candidateDate, "休");
+          offCount++;
+      }
+  }
+}
+
+/**
+ * 指定ユーザーの月内休日日数を集計する。
+ *
+ * カウント対象：
+ * ・休
+ *
+ * カウント対象外：
+ * ・有
+ * ・明
+ */
+private int countMonthlyOffDays(ShiftGenerationContext context, Long userId) {
+
+    int count = 0;
+
+    Map<LocalDate, String> userSchedule = context.getScheduleMap().get(userId);
+    if (userSchedule == null) {
+        return 0;
+    }
+
+    for (String value : userSchedule.values()) {
+        if ("休".equals(value)) {
+            count++;
+        }
+    }
+
+    return count;
+}
+
+/**
+ * 休を割当する最適な候補日を1日返す。
+ *
+ * @param context シフト生成用Context
+ * @param user 対象職員
+ * @return 休み候補日。候補がない場合はnull
+ */
+private LocalDate findBestOffCandidateDate(ShiftGenerationContext context, UserProfile user) {
+
+    LocalDate bestDate = null;
+    int bestScore = Integer.MIN_VALUE;
+
+    for (LocalDate date : context.getDates()) {
+
+        if (!canAssignOffDay(context, user, date)) {
+            continue;
+        }
+
+        int score = scoreOffCandidateDate(context, user, date);
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestDate = date;
+        }
+    }
+
+    return bestDate;
+}
+
+/**
+ * 指定日に休を割当可能か判定する。
+ *
+ * @param context シフト生成用Context
+ * @param user 対象職員
+ * @param date 対象日
+ * @return true = 割当可能、false = 割当不可
+ */
+private boolean canAssignOffDay(ShiftGenerationContext context, UserProfile user, LocalDate date) {
+
+    Long userId = user.getId();
+
+    // 手入力セルは上書きしない
+    if (isLocked(context, userId, date)) {
+        return false;
+    }
+
+    String shiftType = getShiftType(context, userId, date);
+
+    // 空欄なら休を入れてよい
+    if (shiftType == null || shiftType.isBlank()) {
+        return true;
+    }
+
+    // AUTOの日勤・時間帯勤務なら休へ変更してよい
+    // ただし、MANUALの日勤・時間帯勤務はlockedMapで除外済み
+    return isDayTimeShiftType(shiftType);
+}
+
+/**
+ * 休み候補日の評価スコアを計算する。
+ *
+ * @param context シフト生成用Context
+ * @param user 対象職員
+ * @param date 対象日
+ * @return 評価スコア
+ */
+private int scoreOffCandidateDate(ShiftGenerationContext context, UserProfile user, LocalDate date) {
+
+    Long userId = user.getId();
+    int score = 0;
+
+    // 明の翌日は休にしやすいので優先
+    LocalDate prevDate = date.minusDays(1);
+    if (context.getDates().contains(prevDate)
+            && "明".equals(getShiftType(context, userId, prevDate))) {
+        score += 30;
+    }
+
+    // 日勤連続が長いところを休にして連勤を切る
+    int consecutiveDayShift = countConsecutiveDayShiftAround(context, userId, date);
+    score += consecutiveDayShift * 5;
+
+    // 空欄に休を入れる場合は、日勤を減らさないため少し優先
+    String current = getShiftType(context, userId, date);
+    if (current == null || current.isBlank()) {
+        score += 10;
+    }
+
+    // AUTOの日勤・時間帯勤務を休に変える場合は、日勤時間帯の人数が減るため少し減点
+    if (isDayTimeShiftType(current)) {
+        score -= 5;
+    }
+
+    return score;
+}
+
+/**
+ * 月9休を満たしているか検証する。
+ *
+ * @param context シフト生成用Context
+ * @param result シフト生成結果
+ */
+private void validateMonthlyOffDays(ShiftGenerationContext context, ShiftGenerationResult result) {
+
+    for (UserProfile user : context.getUsers()) {
+
+        int offCount = countMonthlyOffDays(context, user.getId());
+
+        if (offCount < 9) {
+            result.addWarning(user.getLastName() + " " + user.getFirstName()
+                    + " さんの休みが9日に満たしていません。現在の休数: " + offCount);
+        }
+    }
+}
+
+
+
+
+    // =========================================================
+    // 共通判定・集計処理
+    // =========================================================
+
+    /**
+     * 指定セルがロックされているか判定する。
+     */
+    private boolean isLocked(ShiftGenerationContext context, Long userId, LocalDate date) {
+        String key = userId + "_" + date;
+        return Boolean.TRUE.equals(context.getLockedMap().get(key));
+    }
+
+    /**
+     * 指定セルが未入力か判定する。
+     */
+    private boolean isBlank(ShiftGenerationContext context, Long userId, LocalDate date) {
+        String value = context.getScheduleMap()
+                .getOrDefault(userId, Map.of())
+                .get(date);
+
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * 生成用マップに自動生成シフトを設定する。
+     */
+    private void setAutoShift(ShiftGenerationContext context, Long userId, LocalDate date, String shiftType) {
+        context.getScheduleMap()
+                .computeIfAbsent(userId, k -> new HashMap<>())
+                .put(date, shiftType);
+    }
+
+    /**
+     * 指定日の指定勤務種別の人数をカウントする。
+     */
+    private int countShiftTypeOnDate(ShiftGenerationContext context, LocalDate date, String shiftType) {
+        int count = 0;
+
+        for (UserProfile user : context.getUsers()) {
+            String value = context.getScheduleMap()
+                    .getOrDefault(user.getId(), Map.of())
+                    .get(date);
+
+            if (shiftType.equals(value)) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * 指定ユーザーの月内の指定勤務種別数をカウントする。
+     */
+    private int countMonthlyShiftType(ShiftGenerationContext context, Long userId, String shiftType) {
+        int count = 0;
+
+        Map<LocalDate, String> userSchedule = context.getScheduleMap().get(userId);
+        if (userSchedule == null) {
+            return 0;
+        }
+
+        for (String value : userSchedule.values()) {
+            if (shiftType.equals(value)) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+    /**
+     * 日勤時間帯として扱う勤務区分か判定する。
+     */
+    private boolean isDayTimeShiftType(String shiftType) {
+        return "日".equals(shiftType)
+                || "9-14".equals(shiftType)
+                || "14-16".equals(shiftType)
+                || "16-18".equals(shiftType)
+                || "14-18".equals(shiftType);
+    }
+
+    /**
+     * 指定ユーザーの月内勤務日数をカウントする。
+     *
+     * 対象：
+     * ・日
+     * ・9-14
+     * ・14-16
+     * ・16-18
+     * ・14-18
+     * ・夜
+     * ・臨(確)
+     * ・臨(自)
+     */
+    private int countMonthlyWorkDays(ShiftGenerationContext context, Long userId) {
+        int count = 0;
+
+        Map<LocalDate, String> userSchedule = context.getScheduleMap().get(userId);
+        if (userSchedule == null) {
+            return 0;
+        }
+
+        for (String value : userSchedule.values()) {
+            if ("日".equals(value)
+                    || "9-14".equals(value)
+                    || "14-16".equals(value)
+                    || "16-18".equals(value)
+                    || "14-18".equals(value)
+                    || "夜".equals(value)
+                    || "臨(確)".equals(value)
+                    || "臨(自)".equals(value)) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+    
+    /**
+     * 指定セルの勤務種別を取得する。
+     */
+    private String getShiftType(ShiftGenerationContext context, Long userId, LocalDate date) {
+        return context.getScheduleMap()
+                .getOrDefault(userId, Map.of())
+                .get(date);
+    }
+
+    // =========================================================
+    // DB保存処理
+    // =========================================================
+
+    /**
+     * 自動生成したシフトをDBへ保存する。
+     *
+     * 保存対象：
+     * ・sourceType = AUTO
+     * ・ロックされていないセル
+     * ・空欄ではないセル
+     *
+     * @param context シフト生成用Context
+     * @param result シフト生成結果
+     */
+    private void saveGeneratedShifts(ShiftGenerationContext context, ShiftGenerationResult result) {
+
+        int savedCount = 0;
+
+        for (UserProfile user : context.getUsers()) {
+            Long userId = user.getId();
+
+            Map<LocalDate, String> userSchedule = context.getScheduleMap().get(userId);
+            if (userSchedule == null) {
+                continue;
+            }
+
+            for (LocalDate date : context.getDates()) {
+
+                if (isLocked(context, userId, date)) {
+                    continue;
+                }
+
+                String shiftType = userSchedule.get(date);
+
+                if (shiftType == null || shiftType.isBlank()) {
+                    continue;
+                }
+
+                Shift shift = new Shift();
+                shift.setUser(user);
+                shift.setDate(date);
+                shift.setDepartment(context.getDepartment());
+                shift.setShiftType(shiftType);
+                shift.setSourceType(Shift.SourceType.AUTO);
+                shift.setStatus(Shift.Status.DRAFT);
+                shift.setTemporary("臨(自)".equals(shiftType));
+                shift.setFixed(false);
+
+                shiftRepository.save(shift);
+                savedCount++;
+            }
+        }
+
+        result.setAutoGeneratedCount(savedCount);
+    }
+
+    // =========================================================
+    // 既存メソッド
+    // =========================================================
+
+    /**
+     * 指定ユーザーが指定日・時間帯に勤務可能かを判定する。
+     *
+     * 現状ロジック：
+     * ・曜日固定休（UserProfile の *Off フラグ）を優先的にブロック
+     * ・当日の希望休・有給（ShiftRequest）に含まれている場合はブロック
+     *
+     * 今後の拡張：
+     * ・時間帯の整合
+     * ・既に他の時間帯で割当済みか
+     * ・連勤上限
+     * ・夜勤明け
+     * ・月9休
+     */
+    private boolean isAvailable(UserProfile user, LocalDate date, String timeSlot, List<ShiftRequest> requests) {
+        switch (date.getDayOfWeek()) {
+            case MONDAY -> { if (Boolean.TRUE.equals(user.getMondayOff())) return false; }
+            case TUESDAY -> { if (Boolean.TRUE.equals(user.getTuesdayOff())) return false; }
+            case WEDNESDAY -> { if (Boolean.TRUE.equals(user.getWednesdayOff())) return false; }
+            case THURSDAY -> { if (Boolean.TRUE.equals(user.getThursdayOff())) return false; }
+            case FRIDAY -> { if (Boolean.TRUE.equals(user.getFridayOff())) return false; }
+            case SATURDAY -> { if (Boolean.TRUE.equals(user.getSaturdayOff())) return false; }
+            case SUNDAY -> { if (Boolean.TRUE.equals(user.getSundayOff())) return false; }
+        }
+
         boolean requestedOff = requests.stream()
                 .anyMatch(r -> r.getUser().getId().equals(user.getId()));
-        if (requestedOff) return false;
 
-        // ③ ここで他の制約（例: 連勤上限、夜勤明けなど）を考慮する拡張が可能
-        //    - 例: 「夜勤含め最大５連勤」「月9休」などの集計ベース制約は、別途当月シフトの集計が必要
-
-        // ④ いずれにも該当しなければ勤務可能
-        return true;
+        return !requestedOff;
     }
 }

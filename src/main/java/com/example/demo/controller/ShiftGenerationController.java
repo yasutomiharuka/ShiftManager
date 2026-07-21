@@ -11,12 +11,15 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.demo.dto.UserProfileDto;
 import com.example.demo.form.ShiftGenerationForm;
 import com.example.demo.form.ShiftRequirementForm;          // ★必要人員入力フォーム
+import com.example.demo.service.ShiftGenerationResult;
 import com.example.demo.service.ShiftGenerationService;
 import com.example.demo.service.ShiftRequirementService;    // ★必要人員サービス
 import com.example.demo.service.ShiftService;
@@ -168,5 +171,38 @@ public class ShiftGenerationController {
         }
 
         return "shift/generate";
+    }
+    
+    /**
+     * シフト自動生成を実行する。
+     *
+     * 【呼び出し元】
+     * シフト生成画面（shift/generate.html）
+     * 「シフトを生成する」ボタン
+     *
+     * 【処理概要】
+     * 1. 自動生成済みシフト（AUTO）を削除
+     * 2. 手入力シフト（MANUAL）は保持
+     * 3. シフト自動生成処理を実行
+     * 4. シフト生成画面へリダイレクト
+     *
+     * @param department 対象部署
+     * @param targetMonth 対象年月（yyyy-MM）
+     * @param redirectAttributes リダイレクト時のメッセージ格納先
+     * @return シフト生成画面へリダイレクト
+     */
+    @PostMapping("/generate")
+    public String generateShift(
+            @RequestParam String department,
+            @RequestParam String targetMonth,
+            RedirectAttributes redirectAttributes) {
+
+        ShiftGenerationResult result =
+                shiftGenerationService.generateComplementShift(department, targetMonth);
+
+        redirectAttributes.addFlashAttribute("notice", "シフト生成処理を実行しました。");
+        redirectAttributes.addFlashAttribute("warnings", result.getWarnings());
+
+        return "redirect:/shift/generate?department=" + department + "&month=" + targetMonth;
     }
 }
