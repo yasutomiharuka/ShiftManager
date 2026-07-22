@@ -218,11 +218,6 @@
 
 	<!-- ▼ 入力モード切替（UIのみ） -->
 	<div class="panel">
-		<strong>入力モード</strong>：
-		<button type="button" onclick="setMode('normal')">通常</button>
-		<button type="button" onclick="setMode('request')">希望休・有給</button>
-		<button type="button" onclick="setMode('temp')">臨時職員（事前）</button>
-		<span class="muted">（セルをクリックして切替）</span>
 
 		<div class="legend" style="margin-top:8px;">
 			<span class="日">日</span>
@@ -350,11 +345,6 @@
 			<button type="submit" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
 				value="UNCONFIRM">
 				確定解除
-			</button>
-
-			<!-- 臨時職員（事前）保存：既存API -->
-			<button type="submit" th:formaction="@{/api/shift/temp/save}" formmethod="post">
-				臨時職員を保存
 			</button>
 
 			<!-- 自動割当 実行（既存の生成処理へ） -->
