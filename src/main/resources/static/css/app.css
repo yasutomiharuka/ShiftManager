@@ -71,7 +71,7 @@ a {
 }
 
 .brand--mobile {
-    display: none;
+    display: inline-flex;
     margin-bottom: 48px;
 }
 
@@ -86,7 +86,9 @@ a {
 .login-layout {
     display: grid;
     min-height: 100vh;
-    grid-template-columns: minmax(360px, 43%) 1fr;
+    padding: 48px 24px;
+    place-items: center;
+    background: var(--surface);
 }
 
 .login-introduction {
@@ -148,10 +150,8 @@ a {
 
 .login-panel {
     display: grid;
-    min-height: 100vh;
-    padding: 48px 24px;
+    width: 100%;
     place-items: center;
-    background: var(--surface);
 }
 
 .login-card {
@@ -458,19 +458,7 @@ a {
 
 @media (max-width: 800px) {
     .login-layout {
-        display: block;
-    }
-
-    .login-introduction {
-        display: none;
-    }
-
-    .login-panel {
         padding: 40px 24px;
-    }
-
-    .brand--mobile {
-        display: inline-flex;
     }
 
     .home-main {
