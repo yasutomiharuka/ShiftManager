@@ -1,41 +1,79 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
-    <title>ユーザー一覧</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ユーザー一覧 | ShiftManager</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
+    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
 </head>
-<body>
-    <h2>ユーザー一覧</h2>
-    <table border="1">
-        <thead>
-            <tr>
-                <th>ユーザーID</th>
-                <th>姓</th>
-                <th>名</th>
-                <th>雇用形態</th>
-                <th>所属</th>
-                <th>詳細</th>
-            </tr>
-        </thead>
-		<tbody>
-			<!-- 事前にメッセージキーを解決する -->
-		    <tr th:each="user : ${users}" th:with="
-		        employmentTypeKey='employment_type.' + ${user.employmentType},
-		        departmentKey='department.' + ${user.department},
-		        employmentTypeMsg=${#messages.msg(employmentTypeKey)},
-		        departmentMsg=${#messages.msg(departmentKey)}
-		    ">
-		        <td th:text="${user.id}"></td>
-		        <td th:text="${user.firstName}"></td>
-		        <td th:text="${user.lastName}"></td>
-		        <td th:text="${employmentTypeMsg}"></td>
-		        <td th:text="${departmentMsg}"></td>
-		        <td>
-		            <a th:href="@{/user/detail/{id}(id=${user.id})}">詳細を見る</a>
-		        </td>
-		    </tr>
-		</tbody>
+<body class="app-page">
+    <header class="app-header">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+            <span class="brand__mark" aria-hidden="true">S</span>
+            <span>ShiftManager</span>
+        </a>
+        <a class="header-back-link" th:href="@{/home}" href="/home">← ホームへ戻る</a>
+    </header>
 
-    </table>
-    <a href="/home">ホームへ戻る</a>
+    <main class="content-main">
+        <div class="page-heading">
+            <div>
+                <p class="eyebrow">USER MANAGEMENT</p>
+                <h1>ユーザー一覧</h1>
+                <p>登録済みの職員情報を確認できます。</p>
+            </div>
+            <a class="button button--primary button--compact" th:href="@{/user/register}" href="/user/register">
+                <span aria-hidden="true">＋</span> 新規ユーザー登録
+            </a>
+        </div>
+
+        <section class="panel" aria-labelledby="user-table-title">
+            <div class="panel__header">
+                <div>
+                    <h2 id="user-table-title">登録ユーザー</h2>
+                    <p>氏名や所属を確認し、詳細画面から編集できます。</p>
+                </div>
+                <span class="count-badge" th:text="|${#lists.size(users)}名|">0名</span>
+            </div>
+
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">ユーザーID</th>
+                            <th scope="col">氏名</th>
+                            <th scope="col">雇用形態</th>
+                            <th scope="col">所属</th>
+                            <th scope="col"><span class="visually-hidden">操作</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="user : ${users}" th:with="
+                            employmentTypeKey='employment_type.' + ${user.employmentType},
+                            departmentKey='department.' + ${user.department},
+                            employmentTypeMsg=${#messages.msg(employmentTypeKey)},
+                            departmentMsg=${#messages.msg(departmentKey)}
+                        ">
+                            <td class="data-table__id" th:text="${user.id}">1</td>
+                            <td>
+                                <span class="user-name" th:text="|${user.firstName} ${user.lastName}|">山田 太郎</span>
+                            </td>
+                            <td><span class="status-badge" th:text="${employmentTypeMsg}">正社員</span></td>
+                            <td th:text="${departmentMsg}">本社</td>
+                            <td class="data-table__action">
+                                <a class="detail-link" th:href="@{/user/detail/{id}(id=${user.id})}">詳細を見る <span aria-hidden="true">→</span></a>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(users)}">
+                            <td class="empty-state" colspan="5">登録されているユーザーはいません。</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer class="app-footer">© ShiftManager</footer>
 </body>
 </html>
