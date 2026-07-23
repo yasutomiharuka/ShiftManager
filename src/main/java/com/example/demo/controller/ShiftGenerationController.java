@@ -23,6 +23,7 @@ import com.example.demo.service.ShiftGenerationResult;
 import com.example.demo.service.ShiftGenerationService;
 import com.example.demo.service.ShiftRequirementService;    // ★必要人員サービス
 import com.example.demo.service.ShiftService;
+import com.example.demo.service.StaffingBalanceService;
 import com.example.demo.service.UserProfileService;
 
 /**
@@ -42,6 +43,7 @@ public class ShiftGenerationController {
     private final ShiftGenerationService shiftGenerationService;
     private final UserProfileService userProfileService;
     private final ShiftService shiftService;
+    private final StaffingBalanceService staffingBalanceService;
 
     // ★追加：各日付・時間帯ごとの「必要人員」を扱うサービス
     //   シフト本体（誰が入るか）とは別集約として管理する。
@@ -50,11 +52,13 @@ public class ShiftGenerationController {
     public ShiftGenerationController(ShiftGenerationService shiftGenerationService,
                                      UserProfileService userProfileService,
                                      ShiftService shiftService,
-                                     ShiftRequirementService shiftRequirementService) { // ★引数追加
+                                     ShiftRequirementService shiftRequirementService,
+                                     StaffingBalanceService staffingBalanceService) { // ★引数追加
         this.shiftGenerationService = shiftGenerationService;
         this.userProfileService = userProfileService;
         this.shiftService = shiftService;
         this.shiftRequirementService = shiftRequirementService; // ★フィールドに設定
+        this.staffingBalanceService = staffingBalanceService;
     }
 
     /**
@@ -111,6 +115,8 @@ public class ShiftGenerationController {
             //   ShiftService#getShiftMap は DRAFT / CONFIRMED 両方を読み込み、
             //   セル単位で優先度（CONFIRMED > DRAFT）と updatedAt に従って1件にマージする
             Map<String, String> shiftMap = shiftService.getShiftMap(users, dates, department);
+            Map<String, Integer> staffingBalanceMap =
+                    staffingBalanceService.buildStaffingBalanceMap(department, targetMonth);
 
             // --- 5. 部署コードと日本語表示名のマッピング ---
             Map<String, String> departmentDisplayMap = Map.of(
@@ -150,6 +156,7 @@ public class ShiftGenerationController {
             model.addAttribute("selectedDepartmentName",
                     departmentDisplayMap.getOrDefault(department, department));
             model.addAttribute("shiftMap", shiftMap);
+            model.addAttribute("staffingBalanceMap", staffingBalanceMap);
             model.addAttribute("form", form);
 
             // ★必要人員入力フォーム（別フォーム）を画面へ渡す
