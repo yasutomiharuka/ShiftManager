@@ -5,6 +5,7 @@
 <head>
 	<meta charset="UTF-8">
 	<title>シフト一覧</title>
+<<<<<<< HEAD
 	<style>
 		table {
 			border-collapse: collapse;
@@ -89,18 +90,23 @@
 		.balance-sufficient { background: #e8f5e9; color: #2e7d32; font-weight: bold; }
 		.balance-excess { background: #e3f2fd; color: #1565c0; font-weight: bold; }
 	</style>
+=======
+	<link rel="stylesheet" th:href="@{/css/app.css}">
+	<link rel="stylesheet" th:href="@{/css/shift.css}">
+>>>>>>> refs/remotes/origin/feature/login-home-ui
 </head>
 
-<body>
+<body class="shift-page shift-list-page">
+	<main class="shift-page__main">
 
 	<!-- ▼ タイトル：monthLabel は null 時フォールバック -->
-	<h2
+	<h2 class="shift-page__title"
 		th:text="|シフト一覧（${selectedDepartmentName != null ? selectedDepartmentName : '部署未選択'}
 		／${monthLabel != null ? monthLabel : '未指定'}）|">
 	</h2>
 
 
-	<form method="get" th:action="@{/shift/list}">
+	<form method="get" th:action="@{/shift/list}" class="shift-filter">
 		<label>部署:</label>
 		<select name="department">
 			<option th:each="deptCode : ${departments}" th:value="${deptCode}"
@@ -112,13 +118,12 @@
 		<!-- ▼ input type="month" は yyyy-MM（monthValue） -->
 		<input type="month" name="month" th:value="${monthValue != null ? monthValue : ''}" />
 
-		<button type="submit">表示</button>
+		<button type="submit" class="shift-button shift-button--primary">表示</button>
 	</form>
 
-	<br />
 
 	<!-- ▼ 追加：凡例 -->
-	<div class="legend">
+	<div class="legend shift-legend" aria-label="勤務区分の凡例">
 		<span class="日">日</span>
 		<span class="shift-9-14">9-14</span>
 		<span class="shift-14-16">14-16</span>
@@ -132,7 +137,8 @@
 		<span class="臨(自)">臨(自)</span>
 	</div>
 
-	<table>
+	<div class="shift-table-wrap">
+	<table class="shift-table shift-table--readonly">
 		<thead>
 			<tr>
 				<th>職員名</th>
@@ -173,15 +179,15 @@
 				</tr>
 </tbody>
 	</table>
-
-	<br>
-	<div>
-		<!-- ▼ リンクの month は yyyy-MM（monthValue）で統一 -->
-		<a th:href="@{/shift/generate(department=${department}, month=${monthValue})}">シフト生成画面へ</a> |
-		<a th:href="@{/shift/edit(department=${department}, month=${monthValue})}">シフト編集画面へ</a> |
-		<a href="/">戻る</a>
 	</div>
 
+	<nav class="shift-page__actions">
+		<!-- ▼ リンクの month は yyyy-MM（monthValue）で統一 -->
+		<a th:href="@{/shift/generate(department=${department}, month=${monthValue})}">シフト生成/編集画面へ</a>
+		<a th:href="@{/home}">ホームへ戻る</a>
+	</nav>
+
+	</main>
 </body>
 
 </html>

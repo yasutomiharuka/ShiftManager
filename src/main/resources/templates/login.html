@@ -1,34 +1,54 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ログイン</title>
+    <title>ログイン | ShiftManager</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
 </head>
-<body>
-    <h1>ログイン</h1>
+<body class="login-page">
+    <main class="login-layout">
+        <section class="login-panel" aria-labelledby="login-title">
+            <div class="login-card">
+                <div class="brand brand--mobile">
+                    <span class="brand__mark" aria-hidden="true">S</span>
+                    <span>ShiftManager</span>
+                </div>
+                <p class="eyebrow">WELCOME BACK</p>
+                <h2 id="login-title">ログイン</h2>
+                <p class="login-card__lead">登録済みのユーザー名とパスワードを入力してください。</p>
 
-    <!-- ログアウトメッセージを表示 -->
-    <div th:if="${message}" style="color: green;">
-        <p th:text="${message}"></p>
-    </div>
+                <div class="alert alert--success" role="status" th:if="${message}">
+                    <span aria-hidden="true">✓</span>
+                    <p th:text="${message}">ログアウトしました。</p>
+                </div>
+                <div class="alert alert--error" role="alert" th:if="${error}">
+                    <span aria-hidden="true">!</span>
+                    <p th:text="${error}">ユーザー名またはパスワードが正しくありません。</p>
+                </div>
 
-    <!-- ログインエラーメッセージを表示 -->
-    <div th:if="${error}" style="color: red;">
-        <p th:text="${error}"></p>
-    </div>
+                <form class="login-form" th:action="@{/login}" action="/login" method="post">
+                    <input type="hidden" name="_csrf" th:value="${_csrf.token}">
 
-    <form action="/login" method="post">
-        <!-- CSRFトークンをフォームに追加 -->
-        <input type="hidden" name="_csrf" th:value="${_csrf.token}">
+                    <div class="form-field">
+                        <label for="username">ユーザー名</label>
+                        <input type="text" id="username" name="username" autocomplete="username"
+                               placeholder="ユーザー名を入力" required autofocus>
+                    </div>
 
-        <label for="username">ユーザー名:</label>
-        <input type="text" id="username" name="username" required>
-        <br>
-        <label for="password">パスワード:</label>
-        <input type="password" id="password" name="password" required>
-        <br>
-        <button type="submit">ログイン</button>
-    </form>
+                    <div class="form-field">
+                        <label for="password">パスワード</label>
+                        <input type="password" id="password" name="password" autocomplete="current-password"
+                               placeholder="パスワードを入力" required>
+                    </div>
+
+                    <button class="button button--primary button--full" type="submit">
+                        ログイン
+                        <span aria-hidden="true">→</span>
+                    </button>
+                </form>
+            </div>
+        </section>
+    </main>
 </body>
 </html>

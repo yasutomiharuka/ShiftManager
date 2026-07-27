@@ -4,6 +4,7 @@
 <head>
 	<meta charset="UTF-8">
 	<title>シフト生成</title>
+<<<<<<< HEAD
 	<style>
 		/* 一覧と同系色で統一 */
 		table {
@@ -169,15 +170,20 @@
 		.balance-sufficient { background: #e8f5e9; color: #2e7d32; font-weight: bold; }
 		.balance-excess { background: #e3f2fd; color: #1565c0; font-weight: bold; }
 	</style>
+=======
+	<link rel="stylesheet" th:href="@{/css/app.css}">
+	<link rel="stylesheet" th:href="@{/css/shift.css}">
+>>>>>>> refs/remotes/origin/feature/login-home-ui
 </head>
 
-<body>
+<body class="shift-page shift-generate-page">
+	<main class="shift-page__main">
 
 	<!-- ▼ 一時保存・確定などの結果メッセージ -->
 	<div class="notice" th:if="${notice}" th:text="${notice}"></div>
 
 	<!-- ▼ タイトル：selectedDepartmentName / monthLabel はnull時のフォールバックを用意（パイプ記法） -->
-	<h2 th:text="|${selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択')}／
+	<h2 class="shift-page__title" th:text="|${selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択')}／
 		${monthLabel != null ? monthLabel : '未指定'} のシフト生成|">
 		シフト生成
 	</h2>
@@ -201,7 +207,7 @@
 	</div>
 
 	<!-- ▼ 部署・月選択フォーム（GET） -->
-	<form method="get" th:action="@{/shift/generate}" class="toolbar">
+	<form method="get" th:action="@{/shift/generate}" class="toolbar shift-filter">
 		<label>部署:</label>
 		<select name="department">
 			<option th:each="deptCode : ${departments != null ? departments : {}}" th:value="${deptCode}"
@@ -215,37 +221,14 @@
 		<!-- month は YearMonth を想定。null の場合は空表示 -->
 		<input type="month" name="month" th:value="${monthValue != null ? monthValue : ''}" />
 
-		<button type="submit">表示</button>
+		<button type="submit" class="shift-button shift-button--primary">表示</button>
 
 		<span class="muted">／ 画面遷移:</span>
 		<a th:href="@{/shift/list(department=${department}, month=${monthValue})}">シフト一覧</a> |
 	</form>
 
-	<!-- ▼ 入力モード切替（UIのみ） -->
-	<div class="panel">
-		<strong>入力モード</strong>：
-		<button type="button" onclick="setMode('normal')">通常</button>
-		<button type="button" onclick="setMode('request')">希望休・有給</button>
-		<button type="button" onclick="setMode('temp')">臨時職員（事前）</button>
-		<span class="muted">（セルをクリックして切替）</span>
-
-		<div class="legend" style="margin-top:8px;">
-			<span class="日">日</span>
-			<span class="9-14">9-14</span>
-			<span class="14-16">14-16</span>
-			<span class="16-18">16-18</span>
-			<span class="14-18">14-18</span>
-			<span class="夜">夜</span>
-			<span class="明">明</span>
-			<span class="休">休</span>
-			<span class="有">有</span>
-			<span class="臨(確)">臨(確)</span>
-			<span class="臨(自)">臨(自)</span>
-		</div>
-	</div>
-
 	<!-- ▼ ペイント用パレット -->
-	<div class="panel">
+	<div class="panel panel--sticky-tools">
 		<div class="palette" id="palette">
 			<span>ペイント:</span>
 			<span class="swatch 日 active" data-val="日" data-key="1">日 <span class="kbd">1</span></span>
@@ -284,7 +267,8 @@
 			</div>
 		</div>
 
-		<table id="shiftTable">
+		<div class="shift-table-wrap shift-table-wrap--editor">
+		<table id="shiftTable" class="shift-table shift-table--editor">
 			<thead class="sticky-head">
 				<tr>
 					<th class="sticky-col">職員名</th>
@@ -338,8 +322,9 @@
 				</tr>
 </tbody>
 		</table>
+		</div>
 
-		<div class="muted" style="margin-top:6px;">
+		<div class="muted shift-help">
 			※ 通常モード：<code>日 → 9-14 → 14-16 → 16-18 → 14-18 → 夜 → 明 → 休 → 有 → 臨(確) → 臨(自) → -</code>／
 			希望休モード：<code>休 → 有 → -</code>／
 			臨時モード：<code>臨(確) → -</code>
@@ -350,38 +335,33 @@
 		</div>
 
 		<!-- ▼ 操作ボタン群。formaction でエンドポイントを切替 -->
-		<div style="display:flex; gap:10px; flex-wrap:wrap;">
+		<div class="shift-action-bar">
 
 			<!-- 一時保存（下書き）: ShiftEditController#save(action=DRAFT) -->
-			<button type="submit" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
+			<button type="submit" class="shift-button shift-button--secondary" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
 				value="DRAFT">
 				一時保存
 			</button>
 
 			<!-- 確定（生成に反映）: ShiftEditController#save(action=CONFIRMED) -->
-			<button type="submit" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
+			<button type="submit" class="shift-button shift-button--primary" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
 				value="CONFIRMED">
 				確定（生成に反映）
 			</button>
 
 			<!-- 確定解除: ShiftEditController#save(action=UNCONFIRM) -->
-			<button type="submit" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
+			<button type="submit" class="shift-button shift-button--ghost" th:formaction="@{/api/shift/request/save}" formmethod="post" name="action"
 				value="UNCONFIRM">
 				確定解除
 			</button>
 
-			<!-- 臨時職員（事前）保存：既存API -->
-			<button type="submit" th:formaction="@{/api/shift/temp/save}" formmethod="post">
-				臨時職員を保存
-			</button>
-
 			<!-- 自動割当 実行（既存の生成処理へ） -->
-			<button type="submit" th:formaction="@{/shift/generate}" formmethod="post">
+			<button type="submit" class="shift-button shift-button--generate" th:formaction="@{/shift/generate}" formmethod="post">
 				シフトを生成する
 			</button>
 
 			<!-- 戻る -->
-			<a th:href="@{/shift/list(department=${department}, month=${monthValue})}">一覧へ戻る</a>
+			<a class="shift-link-button" th:href="@{/shift/list(department=${department}, month=${monthValue})}">一覧へ戻る</a>
 		</div>
 
 	</form>
@@ -399,7 +379,8 @@
 		<div class="panel">
 			<strong>必要人員の入力（部署別・時間帯）</strong>
 
-			<table>
+			<div class="requirement-table-wrap">
+			<table class="requirement-table">
 				<thead>
 					<tr>
 						<th>日付</th>
@@ -437,25 +418,26 @@
 					</tr>
 				</tbody>
 			</table>
+			</div>
 
-			<div class="muted">
+			<div class="muted shift-help">
 				※ 保存先想定：<code>ShiftRequirement(date / department / timeSlot / requiredCount)</code>
 			</div>
 		</div>
 
 		<!-- ▼ 必要人員 操作ボタン群（Shiftと同じ） -->
-		<div style="display:flex; gap:10px; flex-wrap:wrap;">
-			<button type="submit" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
+		<div class="shift-action-bar">
+			<button type="submit" class="shift-button shift-button--secondary" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
 				value="DRAFT">
 				必要人員：一時保存
 			</button>
 
-			<button type="submit" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
+			<button type="submit" class="shift-button shift-button--primary" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
 				value="CONFIRMED">
 				必要人員：確定（生成に反映）
 			</button>
 
-			<button type="submit" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
+			<button type="submit" class="shift-button shift-button--ghost" th:formaction="@{/api/shift/requirement/save}" formmethod="post" name="action"
 				value="UNCONFIRM">
 				必要人員：確定解除
 			</button>
@@ -463,6 +445,8 @@
 
 	</form>
 
+
+	</main>
 
 	<script>
 		// ========== フロント側ロジック ==========
