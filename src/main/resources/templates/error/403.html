@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>アクセス権限がありません</title>
+
+    <!-- 共通CSSがある場合は、実際のファイル名に合わせてください -->
+    <link rel="stylesheet"
+          th:href="@{/css/style.css}">
+</head>
+
+<body>
+
+    <main class="error-container">
+        <div class="error-content">
+
+            <p class="error-code">403</p>
+
+            <h1>アクセス権限がありません</h1>
+
+            <p class="error-message">
+                このページを表示する権限がありません。
+                URLまたはログイン中のユーザーをご確認ください。
+            </p>
+
+            <a th:href="@{/home}"
+               class="back-button">
+                ホームへ戻る
+            </a>
+
+        </div>
+    </main>
+
+</body>
+
+</html>
