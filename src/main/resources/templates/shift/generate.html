@@ -2,187 +2,414 @@
 <html xmlns:th="http://www.thymeleaf.org">
 
 <head>
-	<meta charset="UTF-8">
-	<title>シフト生成</title>
-<<<<<<< HEAD
-	<style>
-		/* 一覧と同系色で統一 */
-		table {
-			border-collapse: collapse;
-			width: 100%;
-		}
 
-		th,
-		td {
-			border: 1px solid #ccc;
-			padding: 6px;
-			text-align: center;
-		}
+    <meta charset="UTF-8">
 
-		.日 {
-			background-color: #e0f7fa;
-		}
+    <title>シフト生成</title>
 
-		/* 水色 */
-		/* パート・短時間勤務 */
-		.\39 -14 {
-			background-color: #e8f5e9;
-		}
+    <!--
+        共通CSS。
 
-		/* 薄緑 */
-		.\31 4-16 {
-			background-color: #f1f8e9;
-		}
+        feature/login-home-uiブランチで追加された
+        共通レイアウトやボタンのデザインを読み込む。
 
-		/* 薄黄緑 */
-		.\31 6-18 {
-			background-color: #fffde7;
-		}
+        既存のインラインCSSも残し、
+        シフト種別の色分けや過不足表示を維持する。
+    -->
+    <link
+        rel="stylesheet"
+        th:href="@{/css/app.css}">
 
-		/* 薄黄色 */
-		.\31 4-18 {
-			background-color: #fff3e0;
-		}
+    <!--
+        シフト一覧・シフト生成画面の共通CSS。
 
-		/* 薄オレンジ */
-		.夜 {
-			background-color: #d1c4e9;
-		}
+        shift-page、
+        shift-button、
+        shift-action-barなどのデザインで使用する。
+    -->
+    <link
+        rel="stylesheet"
+        th:href="@{/css/shift.css}">
 
-		/* 紫 */
-		.明 {
-			background-color: #ffe0b2;
-		}
+    <style>
 
-		/* オレンジ */
-		.休 {
-			background-color: #b3e5fc;
-		}
+        /* ================================================
+           シフト表の基本デザイン
+           ================================================ */
 
-		/* 青 */
-		.有 {
-			background-color: #fff9c4;
-		}
+        /* 一覧と同系色で統一 */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
 
-		/* 黄色 */
-		.臨\(確\) {
-			background-color: #c8e6c9;
-		}
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
 
-		/* 緑  ※CSSは()をエスケープ */
-		.臨\(自\) {
-			background-color: #f0f4c3;
-		}
+        /* ================================================
+           勤務区分ごとの色分け
+           ================================================ */
 
-		/* 黄緑 ※CSSは()をエスケープ */
+        /* 日勤：水色 */
+        .日 {
+            background-color: #e0f7fa;
+        }
 
-		.toolbar {
-			display: flex;
-			gap: 12px;
-			align-items: center;
-			flex-wrap: wrap;
-		}
+        /* パート・短時間勤務：9-14は薄緑 */
+        .\39 -14 {
+            background-color: #e8f5e9;
+        }
 
-		.panel {
-			border: 1px solid #ddd;
-			padding: 10px;
-			margin: 12px 0;
-		}
+        /* パート・短時間勤務：14-16は薄黄緑 */
+        .\31 4-16 {
+            background-color: #f1f8e9;
+        }
 
-		.muted {
-			color: #666;
-			font-size: 0.9em;
-		}
+        /* パート・短時間勤務：16-18は薄黄色 */
+        .\31 6-18 {
+            background-color: #fffde7;
+        }
 
-		.cell-btn {
-			width: 100%;
-			border: none;
-			background: transparent;
-			padding: 4px 0;
-			cursor: pointer;
-		}
+        /* パート・短時間勤務：14-18は薄オレンジ */
+        .\31 4-18 {
+            background-color: #fff3e0;
+        }
 
-		.sticky-col {
-			position: sticky;
-			left: 0;
-			background: #fff;
-		}
+        /* 夜勤：紫 */
+        .夜 {
+            background-color: #d1c4e9;
+        }
 
-		.sticky-head {
-			position: sticky;
-			top: 0;
-			background: #fafafa;
-			z-index: 1;
-		}
+        /* 夜勤明け：オレンジ */
+        .明 {
+            background-color: #ffe0b2;
+        }
 
-		.legend {
-			display: flex;
-			gap: 8px;
-			flex-wrap: wrap;
-		}
+        /* 休み：青 */
+        .休 {
+            background-color: #b3e5fc;
+        }
 
-		.legend span {
-			padding: 2px 6px;
-			border: 1px solid #ccc;
-			border-radius: 4px;
-		}
+        /* 有給：黄色 */
+        .有 {
+            background-color: #fff9c4;
+        }
 
-		.notice {
-			margin: 12px 0;
-			padding: 10px 14px;
-			border: 1px solid #1976d2;
-			background-color: #e3f2fd;
-			color: #0d47a1;
-			border-radius: 6px;
-		}
+        /*
+            確定済み臨時勤務：緑。
 
-		/* ▼ 追加：上部パレット（ペイント方式） */
-		.palette {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			flex-wrap: wrap;
-		}
+            CSSでは括弧をエスケープする。
+        */
+        .臨\(確\) {
+            background-color: #c8e6c9;
+        }
 
-		.palette .swatch {
-			padding: 4px 8px;
-			border: 1px solid #ccc;
-			border-radius: 6px;
-			cursor: pointer;
-			user-select: none;
-		}
+        /*
+            自動生成された臨時勤務：黄緑。
 
-		.palette .swatch.active {
-			outline: 2px solid #1976d2;
-		}
+            CSSでは括弧をエスケープする。
+        */
+        .臨\(自\) {
+            background-color: #f0f4c3;
+        }
 
-		.kbd {
-			font: 12px/1 Consolas, monospace;
-			padding: 2px 6px;
-			border: 1px solid #ccc;
-			border-bottom-width: 2px;
-			border-radius: 4px;
-			background: #fff;
-		}
+        /* ================================================
+           操作エリア・補足表示
+           ================================================ */
 
-		.staffing-label { background: #f5f5f5; font-weight: bold; }
-		.balance-shortage { background: #ffebee; color: #c62828; font-weight: bold; }
-		.balance-sufficient { background: #e8f5e9; color: #2e7d32; font-weight: bold; }
-		.balance-excess { background: #e3f2fd; color: #1565c0; font-weight: bold; }
-	</style>
-=======
-	<link rel="stylesheet" th:href="@{/css/app.css}">
-	<link rel="stylesheet" th:href="@{/css/shift.css}">
->>>>>>> refs/remotes/origin/feature/login-home-ui
+        .toolbar {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .panel {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 12px 0;
+        }
+
+        .muted {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .cell-btn {
+            width: 100%;
+            border: none;
+            background: transparent;
+            padding: 4px 0;
+            cursor: pointer;
+        }
+
+        /* 職員名の列を横スクロール時に固定する。 */
+        .sticky-col {
+            position: sticky;
+            left: 0;
+            background: #fff;
+        }
+
+        /* 日付ヘッダを縦スクロール時に固定する。 */
+        .sticky-head {
+            position: sticky;
+            top: 0;
+            background: #fafafa;
+            z-index: 1;
+        }
+
+        .legend {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .legend span {
+            padding: 2px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /* ================================================
+           保存結果・エラー・生成警告の通知
+           ================================================ */
+
+        /*
+            正常終了時の通知。
+
+            【対象】
+            ・シフトの一時保存。
+            ・シフトの確定。
+            ・シフトの確定解除。
+            ・必要人員の一時保存。
+            ・必要人員の確定。
+            ・必要人員の確定解除。
+            ・シフトの自動生成。
+
+            Controller側でFlashAttributeの
+            noticeが設定された場合に表示する。
+        */
+        .notice {
+            margin: 12px 0;
+            padding: 10px 14px;
+            border: 1px solid #1976d2;
+            background-color: #e3f2fd;
+            color: #0d47a1;
+            border-radius: 6px;
+        }
+
+        /*
+            入力エラー・保存エラー・生成エラーの通知。
+
+            【対象】
+            ・部署が未指定。
+            ・対象年月が不正。
+            ・必要人員に負数を入力。
+            ・不正なaction。
+            ・シフト保存の失敗。
+            ・必要人員保存の失敗。
+            ・シフト自動生成の失敗。
+
+            Controller側でFlashAttributeの
+            errorMessageが設定された場合に表示する。
+        */
+        .notice-error {
+            border-color: #d32f2f;
+            background-color: #ffebee;
+            color: #b71c1c;
+        }
+
+        /*
+            シフト生成時の警告。
+
+            生成処理そのものは成功したものの、
+            人員不足などの警告が発生した場合に使用する。
+
+            ShiftGenerationResult#getWarningsの
+            内容を一覧表示する。
+        */
+        .notice-warning {
+            border-color: #f9a825;
+            background-color: #fffde7;
+            color: #795548;
+        }
+
+        /* 警告メッセージ一覧の余白を整える。 */
+        .notice-warning ul {
+            margin: 8px 0 0;
+            padding-left: 20px;
+        }
+
+        /* 警告メッセージ同士の間隔。 */
+        .notice-warning li + li {
+            margin-top: 4px;
+        }
+
+        /* ================================================
+           上部パレット：ペイント方式
+           ================================================ */
+
+        .palette {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .palette .swatch {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .palette .swatch.active {
+            outline: 2px solid #1976d2;
+        }
+
+        /* キーボードショートカットの表示。 */
+        .kbd {
+            font: 12px/1 Consolas, monospace;
+            padding: 2px 6px;
+            border: 1px solid #ccc;
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            background: #fff;
+        }
+
+        /* ================================================
+           必要人員・勤務人数の過不足表示
+           ================================================ */
+
+        /* 過不足行の項目名。 */
+        .staffing-label {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+
+        /* 人員不足：赤。 */
+        .balance-shortage {
+            background: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+        }
+
+        /* 必要人員を充足：緑。 */
+        .balance-sufficient {
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        /* 人員過剰：青。 */
+        .balance-excess {
+            background: #e3f2fd;
+            color: #1565c0;
+            font-weight: bold;
+        }
+
+    </style>
+
 </head>
 
 <body class="shift-page shift-generate-page">
-	<main class="shift-page__main">
 
-	<!-- ▼ 一時保存・確定などの結果メッセージ -->
-	<div class="notice" th:if="${notice}" th:text="${notice}"></div>
+    <main class="shift-page__main">
 
-	<!-- ▼ タイトル：selectedDepartmentName / monthLabel はnull時のフォールバックを用意（パイプ記法） -->
+        <!--
+            ▼ 一時保存・確定・確定解除・自動生成などの
+            正常終了メッセージ。
+
+            【Controller側の設定例】
+            redirectAttributes.addFlashAttribute(
+                "notice",
+                "必要人員を一時保存しました。"
+            );
+
+            noticeが存在する場合のみ表示する。
+        -->
+        <div
+            class="notice"
+            th:if="${notice}"
+            th:text="${notice}"
+            role="status">
+        </div>
+
+        <!--
+            ▼ 入力エラー・保存エラー・自動生成エラー。
+
+            【Controller側の設定例】
+            redirectAttributes.addFlashAttribute(
+                "errorMessage",
+                "必要人員の保存に失敗しました。"
+            );
+
+            【対象】
+            ・ShiftEditControllerの保存エラー。
+            ・ShiftRequirementControllerの保存エラー。
+            ・ShiftGenerationControllerの生成エラー。
+
+            errorMessageが存在する場合のみ表示する。
+        -->
+        <div
+            class="notice notice-error"
+            th:if="${errorMessage}"
+            th:text="${errorMessage}"
+            role="alert">
+        </div>
+
+        <!--
+            ▼ シフト自動生成時の警告一覧。
+
+            【Controller側の設定例】
+            redirectAttributes.addFlashAttribute(
+                "warnings",
+                result.getWarnings()
+            );
+
+            【表示例】
+            ・2026-08-01 の夜勤候補者が不足しています。
+            ・2026-08-03 の日勤候補者が不足しています。
+
+            warningsがnullの場合や、
+            警告が1件もない場合は表示しない。
+        -->
+        <div
+            class="notice notice-warning"
+            th:if="${warnings != null and !#lists.isEmpty(warnings)}"
+            role="alert">
+
+            <strong>
+                シフト生成時に以下の警告が発生しました。
+            </strong>
+
+            <ul>
+
+                <!--
+                    ShiftGenerationResult#getWarningsに含まれる
+                    警告メッセージを1件ずつ表示する。
+                -->
+                <li
+                    th:each="warning : ${warnings}"
+                    th:text="${warning}">
+                </li>
+
+            </ul>
+
+        </div>
+
+        <!--
+            ▼ タイトル。
+
+            selectedDepartmentName / monthLabelがnullの場合は、
+            部署コードまたは「未指定」を表示する。
+        -->
+		
 	<h2 class="shift-page__title" th:text="|${selectedDepartmentName != null ? selectedDepartmentName : (department != null ? department : '部署未選択')}／
 		${monthLabel != null ? monthLabel : '未指定'} のシフト生成|">
 		シフト生成

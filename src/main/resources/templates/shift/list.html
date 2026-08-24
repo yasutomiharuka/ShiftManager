@@ -1,193 +1,493 @@
-
 <!DOCTYPE html>
+
 <html xmlns:th="http://www.thymeleaf.org">
 
 <head>
-	<meta charset="UTF-8">
-	<title>シフト一覧</title>
-<<<<<<< HEAD
-	<style>
-		table {
-			border-collapse: collapse;
-			width: 100%;
-		}
+    <meta charset="UTF-8">
 
-		th,
-		td {
-			border: 1px solid #ccc;
-			padding: 6px;
-			text-align: center;
-		}
+    <title>シフト一覧</title>
 
-		.日 {
-			background-color: #e0f7fa;
-		}
+    <!--
+        共通デザイン用のスタイルシート。
 
-		/* 水色 */
-		.夜 {
-			background-color: #d1c4e9;
-		}
+        app.css   : アプリケーション全体の共通デザイン
+        shift.css : シフト関連画面の共通デザイン
 
-		/* 紫 */
-		.明 {
-			background-color: #ffe0b2;
-		}
+        Git の競合解消時は、外部 CSS と既存の個別スタイルの両方を残す。
+    -->
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/shift.css}">
 
-		/* オレンジ */
-		.休 {
-			background-color: #b3e5fc;
-		}
+    <style>
+        /*
+         * シフト一覧表の基本設定。
+         *
+         * 外部 CSS を読み込んだうえで、既存画面固有の設定も維持する。
+         */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
 
-		/* 青 */
-		.有 {
-			background-color: #fff9c4;
-		}
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 6px;
+            text-align: center;
+        }
 
-		/* 黄色 */
-		.臨\(確\) {
-			background-color: #c8e6c9;
-		}
+        /*
+         * 勤務区分ごとの背景色。
+         *
+         * 一覧表のセルと凡例の双方で使用する。
+         */
 
-		/* 緑 */
-		.臨\(自\) {
-			background-color: #f0f4c3;
-		}
+        /* 日勤：水色 */
+        .日 {
+            background-color: #e0f7fa;
+        }
 
-		/* 黄緑 */
+        /* 夜勤：紫 */
+        .夜 {
+            background-color: #d1c4e9;
+        }
 
-		/* ▼ 追加：パート・時間帯勤務 */
-		.shift-9-14 {
-			background-color: #e8f5e9;
-		}
+        /* 夜勤明け：オレンジ */
+        .明 {
+            background-color: #ffe0b2;
+        }
 
-		.shift-14-16 {
-			background-color: #f1f8e9;
-		}
+        /* 休日：青 */
+        .休 {
+            background-color: #b3e5fc;
+        }
 
-		.shift-16-18 {
-			background-color: #fffde7;
-		}
+        /* 有給休暇：黄色 */
+        .有 {
+            background-color: #fff9c4;
+        }
 
-		.shift-14-18 {
-			background-color: #fff3e0;
-		}
+        /* 臨時勤務・確定：緑 */
+        .臨\(確\) {
+            background-color: #c8e6c9;
+        }
 
-		.legend {
-			display: flex;
-			gap: 8px;
-			flex-wrap: wrap;
-			margin: 12px 0;
-		}
+        /* 臨時勤務・自動生成：黄緑 */
+        .臨\(自\) {
+            background-color: #f0f4c3;
+        }
 
-		.legend span {
-			padding: 2px 6px;
-			border: 1px solid #ccc;
-			border-radius: 4px;
-		}
+        /*
+         * パート・時間帯勤務の背景色。
+         *
+         * CSS クラス名に勤務時間を直接使用すると扱いづらいため、
+         * shift-9-14 などの専用クラスへ変換して表示する。
+         */
 
-		.staffing-label { background: #f5f5f5; font-weight: bold; }
-		.balance-shortage { background: #ffebee; color: #c62828; font-weight: bold; }
-		.balance-sufficient { background: #e8f5e9; color: #2e7d32; font-weight: bold; }
-		.balance-excess { background: #e3f2fd; color: #1565c0; font-weight: bold; }
-	</style>
-=======
-	<link rel="stylesheet" th:href="@{/css/app.css}">
-	<link rel="stylesheet" th:href="@{/css/shift.css}">
->>>>>>> refs/remotes/origin/feature/login-home-ui
+        /* 9:00～14:00 */
+        .shift-9-14 {
+            background-color: #e8f5e9;
+        }
+
+        /* 14:00～16:00 */
+        .shift-14-16 {
+            background-color: #f1f8e9;
+        }
+
+        /* 16:00～18:00 */
+        .shift-16-18 {
+            background-color: #fffde7;
+        }
+
+        /* 14:00～18:00 */
+        .shift-14-18 {
+            background-color: #fff3e0;
+        }
+
+        /*
+         * 勤務区分の凡例。
+         *
+         * 画面幅が狭い場合は自動的に折り返す。
+         */
+        .legend {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 12px 0;
+        }
+
+        .legend span {
+            padding: 2px 6px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        /*
+         * 画面上部の通知メッセージ。
+         *
+         * notice       : 正常終了時の通知
+         * errorMessage : 保存・取得などの処理失敗時の通知
+         * warnings     : 処理継続可能な警告
+         */
+        .notice {
+            margin: 12px 0;
+            padding: 10px 12px;
+            border: 1px solid #90caf9;
+            border-radius: 4px;
+            background-color: #e3f2fd;
+            color: #0d47a1;
+        }
+
+        /* 処理失敗時のエラー通知 */
+        .notice-error {
+            border-color: #d32f2f;
+            background-color: #ffebee;
+            color: #b71c1c;
+        }
+
+        /* 注意事項や生成結果の警告 */
+        .notice-warning {
+            border-color: #f9a825;
+            background-color: #fffde7;
+            color: #795548;
+        }
+
+        .notice-warning ul {
+            margin: 8px 0 0;
+            padding-left: 20px;
+        }
+
+        .notice-warning li + li {
+            margin-top: 4px;
+        }
+
+        /*
+         * 日付・時間帯別の必要人数に対する過不足表示。
+         *
+         * 不足：赤
+         * 充足：緑
+         * 超過：青
+         */
+        .staffing-label {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+
+        .balance-shortage {
+            background: #ffebee;
+            color: #c62828;
+            font-weight: bold;
+        }
+
+        .balance-sufficient {
+            background: #e8f5e9;
+            color: #2e7d32;
+            font-weight: bold;
+        }
+
+        .balance-excess {
+            background: #e3f2fd;
+            color: #1565c0;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body class="shift-page shift-list-page">
-	<main class="shift-page__main">
 
-	<!-- ▼ タイトル：monthLabel は null 時フォールバック -->
-	<h2 class="shift-page__title"
-		th:text="|シフト一覧（${selectedDepartmentName != null ? selectedDepartmentName : '部署未選択'}
-		／${monthLabel != null ? monthLabel : '未指定'}）|">
-	</h2>
+    <main class="shift-page__main">
 
+        <!--
+            正常終了時の通知。
 
-	<form method="get" th:action="@{/shift/list}" class="shift-filter">
-		<label>部署:</label>
-		<select name="department">
-			<option th:each="deptCode : ${departments}" th:value="${deptCode}"
-				th:text="${departmentNames[deptCode.toString()]}" th:selected="${deptCode == department}">
-			</option>
-		</select>
+            Controller 側で以下のように設定された場合に表示する。
 
-		<label>月:</label>
-		<!-- ▼ input type="month" は yyyy-MM（monthValue） -->
-		<input type="month" name="month" th:value="${monthValue != null ? monthValue : ''}" />
+            redirectAttributes.addFlashAttribute(
+                "notice",
+                "シフトを保存しました。"
+            );
+        -->
+        <div
+            class="notice"
+            th:if="${notice}"
+            th:text="${notice}"
+            role="status">
+        </div>
 
-		<button type="submit" class="shift-button shift-button--primary">表示</button>
-	</form>
+        <!--
+            処理失敗時のエラーメッセージ。
 
+            Controller 側で以下のように設定された場合に表示する。
 
-	<!-- ▼ 追加：凡例 -->
-	<div class="legend shift-legend" aria-label="勤務区分の凡例">
-		<span class="日">日</span>
-		<span class="shift-9-14">9-14</span>
-		<span class="shift-14-16">14-16</span>
-		<span class="shift-16-18">16-18</span>
-		<span class="shift-14-18">14-18</span>
-		<span class="夜">夜</span>
-		<span class="明">明</span>
-		<span class="休">休</span>
-		<span class="有">有</span>
-		<span class="臨(確)">臨(確)</span>
-		<span class="臨(自)">臨(自)</span>
-	</div>
+            redirectAttributes.addFlashAttribute(
+                "errorMessage",
+                "シフトの取得に失敗しました。"
+            );
 
-	<div class="shift-table-wrap">
-	<table class="shift-table shift-table--readonly">
-		<thead>
-			<tr>
-				<th>職員名</th>
-				<th th:each="d : ${dates}" th:text="${#temporals.format(d, 'M/d')}"></th>
-			</tr>
-		</thead>
-		<tbody>
-			<tr th:each="user : ${users}">
-				<td th:text="${user.lastName + ' ' + user.firstName}"></td>
+            role="alert" を付けることで、支援技術にも
+            エラーメッセージであることを伝える。
+        -->
+        <div
+            class="notice notice-error"
+            th:if="${errorMessage}"
+            th:text="${errorMessage}"
+            role="alert">
+        </div>
 
-				<!-- ▼ key変数を使わず、直接 user.id + '_' + dateKey で参照 -->
-				<td th:each="d : ${dates}" th:with="
-                    dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
-                    raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
-                    val=${raw != null ? #strings.trim(raw) : null},
-                    shiftClass=${val == '9-14' ? 'shift-9-14' :
-                        (val == '14-16' ? 'shift-14-16' :
-                        (val == '16-18' ? 'shift-16-18' :
-                        (val == '14-18' ? 'shift-14-18' :
-                        (!#strings.isEmpty(val) ? val : ''))))}
-                " th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
-					th:text="${!#strings.isEmpty(val) ? val : '-'}"
-					th:classappend="${shiftClass}">
-				</td>
-			</tr>
-		
-				<!-- ▼ 日付・時間帯別の過不足（実際の勤務人数－必要人数） -->
-				<tr th:each="slot : ${ {'9-14', '14-16', '16-18', 'NIGHT'} }">
-					<td class="staffing-label"
-						th:text="${slot == 'NIGHT' ? '過不足（夜間）' : '過不足（' + slot + '）'}">過不足</td>
-					<td th:each="d : ${dates}"
-						th:with="dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
-							balance=${staffingBalanceMap != null ? staffingBalanceMap[dateKey + '_' + slot] : null}"
-						th:text="${balance == null ? '-' : (balance > 0 ? '+' + balance : balance)}"
-						th:classappend="${balance == null ? '' :
-							(balance < 0 ? 'balance-shortage' :
-							(balance == 0 ? 'balance-sufficient' : 'balance-excess'))}">-</td>
-				</tr>
-</tbody>
-	</table>
-	</div>
+        <!--
+            複数の警告を一覧表示する。
 
-	<nav class="shift-page__actions">
-		<!-- ▼ リンクの month は yyyy-MM（monthValue）で統一 -->
-		<a th:href="@{/shift/generate(department=${department}, month=${monthValue})}">シフト生成/編集画面へ</a>
-		<a th:href="@{/home}">ホームへ戻る</a>
-	</nav>
+            warnings が存在し、要素が１件以上ある場合のみ表示する。
+        -->
+        <div
+            class="notice notice-warning"
+            th:if="${warnings != null and !#lists.isEmpty(warnings)}"
+            role="alert">
 
-	</main>
+            <strong>以下の警告があります。</strong>
+
+            <ul>
+                <li
+                    th:each="warning : ${warnings}"
+                    th:text="${warning}">
+                </li>
+            </ul>
+        </div>
+
+        <!--
+            タイトル。
+
+            selectedDepartmentName または monthLabel が設定されていない場合は、
+            それぞれ「部署未選択」「未指定」を表示する。
+        -->
+        <h2
+            class="shift-page__title"
+            th:text="|シフト一覧（${selectedDepartmentName != null ? selectedDepartmentName : '部署未選択'}／${monthLabel != null ? monthLabel : '未指定'}）|">
+        </h2>
+
+        <!--
+            部署・対象月の絞り込みフォーム。
+
+            GET 送信により、部署と対象年月を URL のクエリに保持する。
+        -->
+        <form
+            method="get"
+            th:action="@{/shift/list}"
+            class="shift-filter">
+
+            <label>部署:</label>
+
+            <select name="department">
+
+                <!--
+                    departments        : 部署コード一覧
+                    departmentNames    : 部署コードと部署名の対応表
+                    department         : 現在選択中の部署
+                -->
+                <option
+                    th:each="deptCode : ${departments}"
+                    th:value="${deptCode}"
+                    th:text="${departmentNames[deptCode.toString()]}"
+                    th:selected="${deptCode == department}">
+                </option>
+
+            </select>
+
+            <label>月:</label>
+
+            <!-- input type="month" には yyyy-MM 形式の monthValue を設定する -->
+            <input
+                type="month"
+                name="month"
+                th:value="${monthValue != null ? monthValue : ''}">
+
+            <button
+                type="submit"
+                class="shift-button shift-button--primary">
+
+                表示
+
+            </button>
+
+        </form>
+
+        <!--
+            勤務区分の凡例。
+
+            一覧表に表示される勤務区分と背景色の対応を確認できる。
+        -->
+        <div
+            class="legend shift-legend"
+            aria-label="勤務区分の凡例">
+
+            <span class="日">日</span>
+            <span class="shift-9-14">9-14</span>
+            <span class="shift-14-16">14-16</span>
+            <span class="shift-16-18">16-18</span>
+            <span class="shift-14-18">14-18</span>
+            <span class="夜">夜</span>
+            <span class="明">明</span>
+            <span class="休">休</span>
+            <span class="有">有</span>
+            <span class="臨(確)">臨(確)</span>
+            <span class="臨(自)">臨(自)</span>
+
+        </div>
+
+        <!--
+            シフト一覧表。
+
+            shift-table-wrap は、表示幅が足りない場合の横スクロールなど、
+            外部 CSS 側の共通レイアウト設定を適用するために使用する。
+        -->
+        <div class="shift-table-wrap">
+
+            <table class="shift-table shift-table--readonly">
+
+                <thead>
+
+                    <tr>
+
+                        <th>職員名</th>
+
+                        <!-- 対象月の日付を M/d 形式で表示する -->
+                        <th
+                            th:each="d : ${dates}"
+                            th:text="${#temporals.format(d, 'M/d')}">
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody>
+
+                    <!-- 職員ごとの勤務情報 -->
+                    <tr th:each="user : ${users}">
+
+                        <!-- 職員名 -->
+                        <td th:text="${user.lastName + ' ' + user.firstName}">
+                        </td>
+
+                        <!--
+                            shiftMap の参照キーは「職員ID_yyyy-MM-dd」。
+
+                            例：
+                            1_2026-08-01
+
+                            raw:
+                                shiftMap から取得した勤務区分。
+
+                            val:
+                                前後の空白を除去した勤務区分。
+
+                            shiftClass:
+                                時間帯勤務は専用の CSS クラスへ変換し、
+                                日・夜・明・休・有などは勤務区分をそのまま使用する。
+                        -->
+                        <td
+                            th:each="d : ${dates}"
+                            th:with="
+                                dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+                                raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
+                                val=${raw != null ? #strings.trim(raw) : null},
+                                shiftClass=${val == '9-14' ? 'shift-9-14' :
+                                    (val == '14-16' ? 'shift-14-16' :
+                                    (val == '16-18' ? 'shift-16-18' :
+                                    (val == '14-18' ? 'shift-14-18' :
+                                    (!#strings.isEmpty(val) ? val : ''))))}
+                            "
+                            th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
+                            th:text="${!#strings.isEmpty(val) ? val : '-'}"
+                            th:classappend="${shiftClass}">
+
+                        </td>
+
+                    </tr>
+
+                    <!--
+                        日付・時間帯別の過不足。
+
+                        計算内容：
+                        実際の勤務人数 － 必要人数
+
+                        マイナス：必要人数に対して不足
+                        ゼロ    ：必要人数を満たしている
+                        プラス  ：必要人数を超えて配置されている
+                    -->
+                    <tr th:each="slot : ${ {'9-14', '14-16', '16-18', 'NIGHT'} }">
+
+                        <!-- NIGHT の場合は画面上「夜間」と表示する -->
+                        <td
+                            class="staffing-label"
+                            th:text="${slot == 'NIGHT' ? '過不足（夜間）' : '過不足（' + slot + '）'}">
+
+                            過不足
+
+                        </td>
+
+                        <!--
+                            staffingBalanceMap の参照キーは
+                            「yyyy-MM-dd_時間帯」。
+
+                            例：
+                            2026-08-01_9-14
+                            2026-08-01_14-16
+                            2026-08-01_16-18
+                            2026-08-01_NIGHT
+
+                            値が存在しない場合は「-」を表示する。
+                            プラスの値には「+」を付ける。
+                        -->
+                        <td
+                            th:each="d : ${dates}"
+                            th:with="
+                                dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+                                balance=${staffingBalanceMap != null ? staffingBalanceMap[dateKey + '_' + slot] : null}
+                            "
+                            th:text="${balance == null ? '-' : (balance > 0 ? '+' + balance : balance)}"
+                            th:classappend="${balance == null ? '' :
+                                (balance < 0 ? 'balance-shortage' :
+                                (balance == 0 ? 'balance-sufficient' : 'balance-excess'))}">
+
+                            -
+
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        <!--
+            画面遷移リンク。
+
+            シフト生成・編集画面へ移動する際は、
+            現在選択中の部署と対象月を引き継ぐ。
+
+            month には yyyy-MM 形式の monthValue を使用する。
+        -->
+        <nav class="shift-page__actions">
+
+            <a th:href="@{/shift/generate(department=${department}, month=${monthValue})}">
+
+                シフト生成/編集画面へ
+
+            </a>
+
+            <a th:href="@{/home}">
+
+                ホームへ戻る
+
+            </a>
+
+        </nav>
+
+    </main>
+
 </body>
 
 </html>
