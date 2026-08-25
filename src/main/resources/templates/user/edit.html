@@ -1,145 +1,743 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+
 <head>
+
     <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
     <title>ユーザー編集</title>
-    <link rel="stylesheet" href="/css/style.css">
+
+    <!--
+        既存の画面デザイン用スタイルシート。
+
+        th:href を使用することで、アプリケーションの
+        コンテキストパスに合わせて URL を生成する。
+    -->
+    <link
+        rel="stylesheet"
+        th:href="@{/css/app.css}"
+        href="/css/app.css">
+    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
+
+    <style>
+        /*
+         * 保存失敗時に画面上部へ表示するメッセージ。
+         *
+         * UserProfileViewController 側で Model に追加した
+         * errorMessage を表示する。
+         */
+        .edit-error-message {
+            margin: 0 0 16px;
+            padding: 12px 16px;
+            border: 1px solid #d32f2f;
+            border-radius: 6px;
+            background-color: #ffebee;
+            color: #b71c1c;
+        }
+
+        /*
+         * 特定の入力項目に紐付かないエラーを表示する。
+         *
+         * 例：
+         * ・入力項目同士の組み合わせが不正
+         * ・業務上の条件を満たしていない
+         */
+        .edit-global-errors {
+            margin: 0 0 16px;
+            padding: 12px 16px;
+            border: 1px solid #d32f2f;
+            border-radius: 6px;
+            background-color: #ffebee;
+            color: #b71c1c;
+        }
+
+        .edit-global-errors ul {
+            margin: 8px 0 0;
+            padding-left: 20px;
+        }
+
+        .edit-global-errors li + li {
+            margin-top: 4px;
+        }
+
+        /*
+         * 各入力項目のエラーメッセージ。
+
+         * 既存の class="error" をそのまま使用する。
+         */
+        .error {
+            display: block;
+            margin-top: 4px;
+            color: #c62828;
+        }
+
+        /*
+         * パート勤務スケジュールの表示間隔。
+         */
+        .part-time-schedule {
+            margin-top: 1em;
+        }
+    </style>
+
 </head>
-<body>
-    <h2>ユーザー情報の編集</h2>
-    
-    <form th:action="@{/user/edit/confirm}" method="post" th:object="${user}">
-        <input type="hidden" th:field="*{id}" />
 
-        <div>
-            <label for="username">ユーザー名:</label>
-            <input type="text" id="username" th:field="*{username}" required maxlength="100"/>
-            <span th:if="${#fields.hasErrors('username')}" th:errors="*{username}" class="error"></span>
+<body class="app-page">
+    <header class="app-header">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+            <span class="brand__mark" aria-hidden="true">S</span>
+            <span>ShiftManager</span>
+        </a>
+        <a class="header-back-link" th:href="@{/user/list}">← ユーザー一覧へ戻る</a>
+    </header>
+    <main class="content-main content-main--form">
+        <div class="page-heading">
+            <div>
+                <p class="eyebrow">EDIT USER</p>
+                <h1>ユーザー情報の編集</h1>
+                <p>登録内容を変更し、確認画面へ進んでください。</p>
+            </div>
+        </div>
+        <section class="panel detail-panel">
+
+    <!--
+        ユーザー情報の保存に失敗した場合のエラーメッセージ。
+
+        UserProfileViewController 側で以下のように設定した内容を表示する。
+
+        model.addAttribute(
+            "errorMessage",
+            "ユーザー情報の更新に失敗しました。入力内容をご確認ください。"
+        );
+
+        Controller から "user/edit" を返す場合は、
+        編集途中の user オブジェクトがそのまま再表示される。
+    -->
+    <div
+        class="edit-error-message"
+        th:if="${errorMessage != null and !#strings.isEmpty(errorMessage)}"
+        th:text="${errorMessage}"
+        role="alert">
+
+    </div>
+
+    <!--
+        編集確認画面へ送信するフォーム。
+
+        th:object="${user}" と各項目の th:field を紐付けることで、
+        入力エラー時に入力内容とエラーメッセージを保持する。
+
+        パスワード入力欄は設けない。
+
+        UserProfileDto のパスワード必須チェックは、
+        新規登録用のバリデーショングループでのみ実行する。
+    -->
+    <form
+        class="edit-form"
+        th:action="@{/user/edit/confirm}"
+        method="post"
+        th:object="${user}">
+
+        <!--
+            更新対象のユーザー ID。
+
+            確認画面・完了画面へ進む際も、
+            どのユーザーを更新するか判断するために使用する。
+        -->
+        <input
+            type="hidden"
+            th:field="*{id}">
+
+        <!--
+            フォーム全体のエラー。
+
+            特定の項目ではなく、フォーム全体に対して登録された
+            バリデーションエラーがある場合に表示する。
+        -->
+        <div
+            class="edit-global-errors"
+            th:if="${#fields.hasGlobalErrors()}"
+            role="alert">
+
+            <strong>入力内容をご確認ください。</strong>
+
+            <ul>
+
+                <li
+                    th:each="error : ${#fields.globalErrors()}"
+                    th:text="${error}">
+
+                </li>
+
+            </ul>
+
         </div>
 
+        <!-- ユーザー名 -->
         <div>
-            <label for="role">ユーザーロール:</label>
-            <select id="role" th:field="*{role}">
-                <option value="ADMIN">管理者</option>
-                <option value="USER">一般ユーザー</option>
+
+            <label for="username">
+
+                ユーザー名:
+
+            </label>
+
+            <input
+                type="text"
+                id="username"
+                th:field="*{username}"
+                required
+                maxlength="100">
+
+            <!-- ユーザー名に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('username')}"
+                th:errors="*{username}"
+                class="error">
+
+            </span>
+
+        </div>
+
+        <!-- ユーザーの権限 -->
+        <div>
+
+            <label for="role">
+
+                ユーザーロール:
+
+            </label>
+
+            <select
+                id="role"
+                th:field="*{role}">
+
+                <option value="ADMIN">
+
+                    管理者
+
+                </option>
+
+                <option value="USER">
+
+                    一般ユーザー
+
+                </option>
+
             </select>
-            <span th:if="${#fields.hasErrors('role')}" th:errors="*{role}" class="error"></span>
+
+            <!-- 権限に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('role')}"
+                th:errors="*{role}"
+                class="error">
+
+            </span>
+
         </div>
 
+        <!-- 姓 -->
         <div>
-            <label for="firstName">姓:</label>
-            <input type="text" id="firstName" th:field="*{firstName}" required maxlength="50"/>
-            <span th:if="${#fields.hasErrors('firstName')}" th:errors="*{firstName}" class="error"></span>
+
+            <label for="firstName">
+
+                姓:
+
+            </label>
+
+            <input
+                type="text"
+                id="firstName"
+                th:field="*{firstName}"
+                required
+                maxlength="50">
+
+            <!-- 姓に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('firstName')}"
+                th:errors="*{firstName}"
+                class="error">
+
+            </span>
+
         </div>
 
+        <!-- 名 -->
         <div>
-            <label for="lastName">名:</label>
-            <input type="text" id="lastName" th:field="*{lastName}" required maxlength="50"/>
-            <span th:if="${#fields.hasErrors('lastName')}" th:errors="*{lastName}" class="error"></span>
+
+            <label for="lastName">
+
+                名:
+
+            </label>
+
+            <input
+                type="text"
+                id="lastName"
+                th:field="*{lastName}"
+                required
+                maxlength="50">
+
+            <!-- 名に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('lastName')}"
+                th:errors="*{lastName}"
+                class="error">
+
+            </span>
+
         </div>
 
+        <!-- 生年月日 -->
         <div>
-            <label for="birthDate">生年月日:</label>
-            <input type="date" id="birthDate" th:field="*{birthDate}" required/>
-            <span th:if="${#fields.hasErrors('birthDate')}" th:errors="*{birthDate}" class="error"></span>
+
+            <label for="birthDate">
+
+                生年月日:
+
+            </label>
+
+            <input
+                type="date"
+                id="birthDate"
+                th:field="*{birthDate}"
+                required>
+
+            <!-- 生年月日に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('birthDate')}"
+                th:errors="*{birthDate}"
+                class="error">
+
+            </span>
+
         </div>
 
+        <!-- 性別 -->
         <div>
-            <label for="gender">性別:</label>
-            <select id="gender" th:field="*{gender}">
-                <option value="male">男性</option>
-                <option value="female">女性</option>
+
+            <label for="gender">
+
+                性別:
+
+            </label>
+
+            <select
+                id="gender"
+                th:field="*{gender}">
+
+                <option value="male">
+
+                    男性
+
+                </option>
+
+                <option value="female">
+
+                    女性
+
+                </option>
+
             </select>
-            <span th:if="${#fields.hasErrors('gender')}" th:errors="*{gender}" class="error"></span>
+
+            <!-- 性別に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('gender')}"
+                th:errors="*{gender}"
+                class="error">
+
+            </span>
+
         </div>
 
+        <!--
+            雇用形態。
+
+            パートを選択した場合のみ、
+            曜日別の固定勤務スケジュールを表示する。
+        -->
         <div>
-            <label for="employmentType">雇用形態:</label>
-			<select id="employmentType" th:field="*{employmentType}" onchange="togglePartTimeFields()">
-                <option value="fulltime">正社員</option>
-                <option value="parttime">パート</option>
+
+            <label for="employmentType">
+
+                雇用形態:
+
+            </label>
+
+            <select
+                id="employmentType"
+                th:field="*{employmentType}"
+                onchange="togglePartTimeFields()">
+
+                <option value="fulltime">
+
+                    正社員
+
+                </option>
+
+                <option value="parttime">
+
+                    パート
+
+                </option>
+
             </select>
-            <span th:if="${#fields.hasErrors('employmentType')}" th:errors="*{employmentType}" class="error"></span>
+
+            <!-- 雇用形態に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('employmentType')}"
+                th:errors="*{employmentType}"
+                class="error">
+
+            </span>
+
         </div>
-		
-		<!-- パート専用スケジュール -->
-		<div id="partTimeFields" th:style="${user.employmentType == 'parttime'} ? '' : 'display:none;'" style="margin-top: 1em;">
-		    <h4>固定勤務スケジュール（曜日別勤務時間）</h4>
 
-		    <div>
-		        <label>月曜日:</label>
-		        <input type="checkbox" th:field="*{mondayOff}" />休み
-		        <input type="time" th:field="*{mondayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{mondayEndTime}" />
-		    </div>
-		    <div>
-		        <label>火曜日:</label>
-		        <input type="checkbox" th:field="*{tuesdayOff}" />休み
-		        <input type="time" th:field="*{tuesdayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{tuesdayEndTime}" />
-		    </div>
-		    <div>
-		        <label>水曜日:</label>
-		        <input type="checkbox" th:field="*{wednesdayOff}" />休み
-		        <input type="time" th:field="*{wednesdayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{wednesdayEndTime}" />
-		    </div>
-		    <div>
-		        <label>木曜日:</label>
-		        <input type="checkbox" th:field="*{thursdayOff}" />休み
-		        <input type="time" th:field="*{thursdayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{thursdayEndTime}" />
-		    </div>
-		    <div>
-		        <label>金曜日:</label>
-		        <input type="checkbox" th:field="*{fridayOff}" />休み
-		        <input type="time" th:field="*{fridayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{fridayEndTime}" />
-		    </div>
-		    <div>
-		        <label>土曜日:</label>
-		        <input type="checkbox" th:field="*{saturdayOff}" />休み
-		        <input type="time" th:field="*{saturdayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{saturdayEndTime}" />
-		    </div>
-		    <div>
-		        <label>日曜日:</label>
-		        <input type="checkbox" th:field="*{sundayOff}" />休み
-		        <input type="time" th:field="*{sundayStartTime}" />
-		        〜
-		        <input type="time" th:field="*{sundayEndTime}" />
-		    </div>
-		</div>
+        <!--
+            パート専用スケジュール。
 
+            雇用形態が parttime の場合だけ表示する。
+
+            初回表示時は th:style で表示状態を設定し、
+            画面操作時は togglePartTimeFields() で切り替える。
+
+            保存エラーや入力エラーで編集画面に戻った場合も、
+            user.employmentType の値に応じて表示状態を復元する。
+        -->
+        <div
+            id="partTimeFields"
+            class="part-time-schedule"
+            th:style="${user.employmentType == 'parttime'} ? '' : 'display: none;'">
+
+            <h4>固定勤務スケジュール（曜日別勤務時間）</h4>
+
+            <!-- 月曜日 -->
+            <div>
+
+                <label for="mondayOff">
+
+                    月曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="mondayOff"
+                    th:field="*{mondayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="mondayStartTime"
+                    th:field="*{mondayStartTime}"
+                    aria-label="月曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="mondayEndTime"
+                    th:field="*{mondayEndTime}"
+                    aria-label="月曜日の終了時間">
+
+            </div>
+
+            <!-- 火曜日 -->
+            <div>
+
+                <label for="tuesdayOff">
+
+                    火曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="tuesdayOff"
+                    th:field="*{tuesdayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="tuesdayStartTime"
+                    th:field="*{tuesdayStartTime}"
+                    aria-label="火曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="tuesdayEndTime"
+                    th:field="*{tuesdayEndTime}"
+                    aria-label="火曜日の終了時間">
+
+            </div>
+
+            <!-- 水曜日 -->
+            <div>
+
+                <label for="wednesdayOff">
+
+                    水曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="wednesdayOff"
+                    th:field="*{wednesdayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="wednesdayStartTime"
+                    th:field="*{wednesdayStartTime}"
+                    aria-label="水曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="wednesdayEndTime"
+                    th:field="*{wednesdayEndTime}"
+                    aria-label="水曜日の終了時間">
+
+            </div>
+
+            <!-- 木曜日 -->
+            <div>
+
+                <label for="thursdayOff">
+
+                    木曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="thursdayOff"
+                    th:field="*{thursdayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="thursdayStartTime"
+                    th:field="*{thursdayStartTime}"
+                    aria-label="木曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="thursdayEndTime"
+                    th:field="*{thursdayEndTime}"
+                    aria-label="木曜日の終了時間">
+
+            </div>
+
+            <!-- 金曜日 -->
+            <div>
+
+                <label for="fridayOff">
+
+                    金曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="fridayOff"
+                    th:field="*{fridayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="fridayStartTime"
+                    th:field="*{fridayStartTime}"
+                    aria-label="金曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="fridayEndTime"
+                    th:field="*{fridayEndTime}"
+                    aria-label="金曜日の終了時間">
+
+            </div>
+
+            <!-- 土曜日 -->
+            <div>
+
+                <label for="saturdayOff">
+
+                    土曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="saturdayOff"
+                    th:field="*{saturdayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="saturdayStartTime"
+                    th:field="*{saturdayStartTime}"
+                    aria-label="土曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="saturdayEndTime"
+                    th:field="*{saturdayEndTime}"
+                    aria-label="土曜日の終了時間">
+
+            </div>
+
+            <!-- 日曜日 -->
+            <div>
+
+                <label for="sundayOff">
+
+                    日曜日:
+
+                </label>
+
+                <input
+                    type="checkbox"
+                    id="sundayOff"
+                    th:field="*{sundayOff}">
+
+                休み
+
+                <input
+                    type="time"
+                    id="sundayStartTime"
+                    th:field="*{sundayStartTime}"
+                    aria-label="日曜日の開始時間">
+
+                〜
+
+                <input
+                    type="time"
+                    id="sundayEndTime"
+                    th:field="*{sundayEndTime}"
+                    aria-label="日曜日の終了時間">
+
+            </div>
+
+        </div>
+
+        <!-- 所属部署 -->
         <div>
-            <label for="department">所属:</label>
-            <select id="department" th:field="*{department}">
-                <option value="amami">天美</option>
-                <option value="main">本社</option>
+
+            <label for="department">
+
+                所属:
+
+            </label>
+
+            <select
+                id="department"
+                th:field="*{department}">
+
+                <option value="amami">
+
+                    天美
+
+                </option>
+
+                <option value="main">
+
+                    本社
+
+                </option>
+
             </select>
-            <span th:if="${#fields.hasErrors('department')}" th:errors="*{department}" class="error"></span>
+
+            <!-- 所属部署に関する入力エラー -->
+            <span
+                th:if="${#fields.hasErrors('department')}"
+                th:errors="*{department}"
+                class="error">
+
+            </span>
+
         </div>
 
-        <div>
-            <button type="submit">確認</button>
-            <a th:href="@{/user/detail/{id}(id=${user.id})}">戻る</a>
+        <!-- 確認画面への送信とユーザー詳細画面への戻りリンク -->
+        <div class="form-actions">
+
+            <button class="button button--primary" type="submit">
+
+                確認
+
+            </button>
+
+            <!-- 編集対象のユーザー詳細画面へ戻る -->
+            <a class="button button--secondary" th:href="@{/user/detail/{id}(id=${user.id})}">
+
+                戻る
+
+            </a>
+
         </div>
+
     </form>
-	
-	<script>
-	function togglePartTimeFields() {
-	    const selected = document.getElementById("employmentType").value;
-	    const partFields = document.getElementById("partTimeFields");
-	    partFields.style.display = (selected === "parttime") ? "block" : "none";
-	}
-	window.onload = togglePartTimeFields;
-	</script>
-	
+        </section>
+    </main>
+    <footer class="app-footer">© ShiftManager</footer>
+
+    <script>
+        /*
+         * 雇用形態に応じて、
+         * パート専用の固定勤務スケジュールを表示・非表示にする。
+         *
+         * パート勤務の場合：
+         *     曜日別の勤務時間を表示する。
+         *
+         * 正社員の場合：
+         *     曜日別の勤務時間を非表示にする。
+         *
+         * 表示状態だけを変更し、入力済みの勤務時間は削除しない。
+         * そのため、雇用形態を切り替えても入力内容を保持できる。
+         */
+        function togglePartTimeFields() {
+            const selectedEmploymentType =
+                document.getElementById("employmentType").value;
+
+            const partTimeFields =
+                document.getElementById("partTimeFields");
+
+            partTimeFields.style.display =
+                selectedEmploymentType === "parttime"
+                    ? "block"
+                    : "none";
+        }
+
+        /*
+         * 初回表示時とエラー発生後の再表示時に、
+         * 現在選択されている雇用形態を画面へ反映する。
+         */
+        document.addEventListener(
+            "DOMContentLoaded",
+            togglePartTimeFields
+        );
+    </script>
+
 </body>
+
 </html>

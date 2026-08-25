@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>エラーが発生しました</title>
+    <title>ページが見つかりません</title>
     <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
     <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
 </head>
@@ -17,9 +17,9 @@
     </header>
     <main class="content-main content-main--form">
         <section class="error-card" aria-labelledby="error-title">
-            <span class="error-card__code">ERROR</span>
-            <h1 id="error-title">エラーが発生しました</h1>
-            <p th:text="${errorMessage} ?: '予期しないエラーが発生しました。時間をおいて再度お試しください。'">予期しないエラーが発生しました。</p>
+            <span class="error-card__code">404</span>
+            <h1 id="error-title">ページが見つかりません</h1>
+            <p>指定されたページは存在しないか、移動した可能性があります。</p>
             <a class="button button--primary" th:href="@{/home}">ホームへ戻る</a>
         </section>
     </main>

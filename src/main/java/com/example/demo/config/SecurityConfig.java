@@ -23,48 +23,66 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+            throws Exception {
+
         http
             // セッション管理の設定
             .sessionManagement(session -> session
-                .maximumSessions(1) // 同時ログインセッション数を制限
-                .maxSessionsPreventsLogin(false) // セッション数を超えた場合、既存のセッションを無効化
+                .maximumSessions(1)
+                // 上限を超えた場合、既存セッションを無効化
+                .maxSessionsPreventsLogin(false)
                 .and()
-                .sessionFixation().migrateSession() // セッションフィクセーション攻撃を防止
+                // セッションフィクセーション攻撃を防止
+                .sessionFixation().migrateSession()
             )
+
             // CSRF保護の設定
             .csrf(csrf -> csrf
-            		.csrfTokenRepository(new HttpSessionCsrfTokenRepository()) // セッションでCSRFトークンを管理
+                .csrfTokenRepository(
+                    new HttpSessionCsrfTokenRepository()
+                )
             )
+
             // 認可ルールの設定
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
-                    "/api/register",  // API登録
-                    "/login",         // ログインページ
-                    "user/register/**", // ユーザー登録関連のリクエストを許可
-                    "/css/**", "/js/**"  // 静的リソース
-                ).permitAll() // 認証不要
-                .anyRequest().authenticated() // その他のリクエストは認証が必要
+                    "/api/register",
+                    "/login",
+                    "/user/register/**",
+                    "/error/**",
+                    "/css/**",
+                    "/js/**",
+                    "/images/**"
+                ).permitAll()
+                .anyRequest().authenticated()
             )
+
+            // 権限不足（403）の場合の遷移先
+            .exceptionHandling(exception -> exception
+                .accessDeniedPage("/error/403")
+            )
+
             // フォームログインの設定
             .formLogin(form -> form
-                .loginPage("/login") // ログインページ
-                .defaultSuccessUrl("/home", true) // ログイン成功後のリダイレクト先
-                .permitAll() // ログインフォーム自体は誰でもアクセス可能
+                .loginPage("/login")
+                .defaultSuccessUrl("/home", true)
+                .permitAll()
             )
+
             // ログアウトの設定
             .logout(logout -> logout
-                .logoutUrl("/logout") // ログアウトURL
-                .logoutSuccessUrl("/login?logout") // ログアウト成功後のリダイレクト先
-                .invalidateHttpSession(true) // セッションを無効化
-                .deleteCookies("JSESSIONID", "XSRF-TOKEN") // クッキーを削除
-                .permitAll() // ログアウトは誰でも可能
+                .logoutUrl("/logout")
+                .logoutSuccessUrl("/login?logout")
+                .invalidateHttpSession(true)
+                .deleteCookies("JSESSIONID", "XSRF-TOKEN")
+                .permitAll()
             );
 
-        return http.build(); // SecurityFilterChainのビルド
+        return http.build();
     }
 
-    // パスワードエンコーダーの設定（BCryptを使用）
+    // パスワードエンコーダーの設定
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -73,19 +91,25 @@ public class SecurityConfig {
     // 認証プロバイダーの設定
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        DaoAuthenticationProvider authProvider =
+                new DaoAuthenticationProvider();
+
         authProvider.setUserDetailsService(userDetailsService);
         authProvider.setPasswordEncoder(passwordEncoder());
+
         return authProvider;
     }
 
     // 認証マネージャーの設定
     @Bean
-    public AuthenticationManager authenticationManager(HttpSecurity http, PasswordEncoder passwordEncoder) throws Exception {
+    public AuthenticationManager authenticationManager(
+            HttpSecurity http,
+            PasswordEncoder passwordEncoder) throws Exception {
+
         return http.getSharedObject(AuthenticationManager.class);
     }
 
-    // セッションイベントの公開 (並行セッションの管理用) いったんコメントアウト Spring Boot 3 / Spring Security 6対応必要
+    // 並行セッションを管理するためのイベント発行
     @Bean
     public HttpSessionEventPublisher httpSessionEventPublisher() {
         return new HttpSessionEventPublisher();

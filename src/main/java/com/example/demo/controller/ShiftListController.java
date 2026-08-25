@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import com.example.demo.dto.UserProfileDto;
 import com.example.demo.service.ShiftService;
+import com.example.demo.service.StaffingBalanceService;
 import com.example.demo.service.UserProfileService;
 
 @Controller
@@ -24,10 +25,14 @@ public class ShiftListController {
 
     private final ShiftService shiftService;
     private final UserProfileService userProfileService;
+    private final StaffingBalanceService staffingBalanceService;
 
-    public ShiftListController(ShiftService shiftService, UserProfileService userProfileService) {
+    public ShiftListController(ShiftService shiftService,
+            UserProfileService userProfileService,
+            StaffingBalanceService staffingBalanceService) {
         this.shiftService = shiftService;
         this.userProfileService = userProfileService;
+        this.staffingBalanceService = staffingBalanceService;
     }
 
     @GetMapping("/list")
@@ -57,6 +62,8 @@ public class ShiftListController {
 
         // ⑤ シフト情報を userId + '_' + 日付 をキーとして取得（表示用）
         Map<String, String> shiftMap = shiftService.getShiftMap(users, dates, department);
+        Map<String, Integer> staffingBalanceMap =
+                staffingBalanceService.buildStaffingBalanceMap(department, targetMonth);
 
         // ⑥ 部署コードと表示名のマッピング（日本語表示用）
         Map<String, String> departmentDisplayMap = Map.of(
@@ -68,6 +75,7 @@ public class ShiftListController {
         model.addAttribute("users", users);
         model.addAttribute("dates", dates);
         model.addAttribute("shiftMap", shiftMap);
+        model.addAttribute("staffingBalanceMap", staffingBalanceMap);
         model.addAttribute("department", department);
 
         // ★month は衝突しやすいので、用途別に分けて渡す
