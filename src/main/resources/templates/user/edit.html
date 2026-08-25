@@ -20,8 +20,9 @@
     -->
     <link
         rel="stylesheet"
-        th:href="@{/css/style.css}"
-        href="/css/style.css">
+        th:href="@{/css/app.css}"
+        href="/css/app.css">
+    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
 
     <style>
         /*
@@ -85,9 +86,23 @@
 
 </head>
 
-<body>
-
-    <h2>ユーザー情報の編集</h2>
+<body class="app-page">
+    <header class="app-header">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+            <span class="brand__mark" aria-hidden="true">S</span>
+            <span>ShiftManager</span>
+        </a>
+        <a class="header-back-link" th:href="@{/user/list}">← ユーザー一覧へ戻る</a>
+    </header>
+    <main class="content-main content-main--form">
+        <div class="page-heading">
+            <div>
+                <p class="eyebrow">EDIT USER</p>
+                <h1>ユーザー情報の編集</h1>
+                <p>登録内容を変更し、確認画面へ進んでください。</p>
+            </div>
+        </div>
+        <section class="panel detail-panel">
 
     <!--
         ユーザー情報の保存に失敗した場合のエラーメッセージ。
@@ -122,6 +137,7 @@
         新規登録用のバリデーショングループでのみ実行する。
     -->
     <form
+        class="edit-form"
         th:action="@{/user/edit/confirm}"
         method="post"
         th:object="${user}">
@@ -663,16 +679,16 @@
         </div>
 
         <!-- 確認画面への送信とユーザー詳細画面への戻りリンク -->
-        <div>
+        <div class="form-actions">
 
-            <button type="submit">
+            <button class="button button--primary" type="submit">
 
                 確認
 
             </button>
 
             <!-- 編集対象のユーザー詳細画面へ戻る -->
-            <a th:href="@{/user/detail/{id}(id=${user.id})}">
+            <a class="button button--secondary" th:href="@{/user/detail/{id}(id=${user.id})}">
 
                 戻る
 
@@ -681,6 +697,9 @@
         </div>
 
     </form>
+        </section>
+    </main>
+    <footer class="app-footer">© ShiftManager</footer>
 
     <script>
         /*
