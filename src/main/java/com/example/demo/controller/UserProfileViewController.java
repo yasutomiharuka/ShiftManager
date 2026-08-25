@@ -448,7 +448,6 @@ public class UserProfileViewController {
         }
 
         try {
-
             // Serviceを通してユーザー情報を更新する。
             //
             // 既存のUserProfileServiceでは、

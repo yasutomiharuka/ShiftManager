@@ -269,7 +269,6 @@ public class RegistrationController {
         }
 
         try {
-
             // サービスクラスを通してUserProfileDtoを
             // UserProfileエンティティに変換し、DBへ保存する。
             //

@@ -490,7 +490,6 @@ public class ShiftRequirementController {
         // =========================================================
 
         try {
-
             switch (normalizedAction) {
 
             case "CONFIRMED":
