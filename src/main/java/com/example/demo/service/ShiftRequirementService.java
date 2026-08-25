@@ -1,9 +1,11 @@
 // src/main/java/com/example/demo/service/ShiftRequirementService.java
 package com.example.demo.service;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,28 +18,28 @@ import com.example.demo.model.ShiftRequirement;
 import com.example.demo.repository.ShiftRequirementRepository;
 
 /**
- * 【必要人員（ShiftRequirement）に関する業務ロジックを担当するサービス】
+ * 必要人員（ShiftRequirement）に関する業務ロジックを担当するサービス。
  *
- * ■役割
- * ・各日付・時間帯・部署ごとの「必要人員数」を取得/保存する。
- * ・generate.html の入力フォーム（ShiftRequirementForm）との相互変換（詰め戻し/保存）を担当する。
+ * 主な役割：
+ * ・部署、日付、時間帯ごとの必要人員を取得する。
+ * ・シフト生成画面用の必要人員フォームを作成する。
+ * ・必要人員の一時保存、確定、確定解除を行う。
+ * ・過去に保存した必要人員を翌月以降の初期値として引き継ぐ。
  *
- * ■重要ポイント（表示されない問題の根本対策）
- * ・generate.html は th:field でフォーム（requiredCounts）を参照して表示するため、
- *   GET表示時に「DBの値をフォームへ詰め戻す」必要がある。
- * ・List(rows) の index 管理はズレやすいので、date+timeSlot をキーにした Map(requiredCounts) で管理する。
+ * 必要人員の初期値は、以下の優先順位で設定する。
  *
- * ■状態管理（DRAFT / CONFIRMED）
- * ・本設計は「1セル=1レコード（date+department+timeSlotで一意）」の運用。
- * ・status は「そのレコードがいま確定扱いか、下書き扱いか」を表すフラグ。
- *   ※「確定と下書きを同時に2本保持する」設計ではない（ユニーク制約が status を含まないため）。
+ * 1. 対象月に保存済みの必要人員
+ * 2. 同じ部署、曜日、時間帯の直近の過去登録値
+ * 3. 0
  */
 @Service
 public class ShiftRequirementService {
 
     private final ShiftRequirementRepository shiftRequirementRepository;
 
-    /** 画面・DBで共通に扱う時間帯コード（DB保存値と完全一致させること） */
+    /**
+     * 画面・DBで共通に扱う時間帯コード。
+     */
     public static final List<String> TIME_SLOTS = Arrays.asList(
             "09-14",
             "14-16",
@@ -45,109 +47,345 @@ public class ShiftRequirementService {
             "NIGHT"
     );
 
-    public ShiftRequirementService(ShiftRequirementRepository shiftRequirementRepository) {
+    public ShiftRequirementService(
+            ShiftRequirementRepository shiftRequirementRepository) {
+
         this.shiftRequirementRepository = shiftRequirementRepository;
     }
 
     // ======================================================================
-    // 参照系（画面表示用）
+    // 参照系：画面表示用
     // ======================================================================
 
     /**
-     * 指定した部署・年月の「日付×時間帯ごとの必要人員」を取得する。
+     * 指定した部署・年月の必要人員を取得する。
      *
      * 戻り値の構造：
-     *  Map<LocalDate, Map<String, Integer>>
-     *   - 第一キー：日付（例: 2026-01-01）
-     *   - 第二キー：timeSlot（例: "09-14"）
-     *   - 値：requiredCount（必要人数）
      *
-     * 【基本方針（運用ルール）】
-     * ・本システムは「1セル（date + department + timeSlot）= 1レコード」を前提とし、
-     *   一時保存/確定は status を上書き更新する運用（確定で上書き）とする。
+     * Map<
+     *     LocalDate,
+     *     Map<String, Integer>
+     * >
      *
-     * 【表示ルール（実務上の安全策）】
-     * ・原則は上記のとおりレコードは1件のはずだが、データ移行・手動更新・制約漏れ等により
-     *   同一セルのデータが混在した場合でも画面表示がブレないよう、取得結果は
-     *   「CONFIRMED が存在するセルは CONFIRMED を優先、なければ DRAFT を採用」
-     *   という優先順位でマッピングして返す。
+     * 例：
      *
-     * ※「CONFIRMEDのみ表示したい」等の要件が将来出た場合は、
-     *   Repository 側で status 条件を追加して絞り込む方式に切り替える。
+     * 2026-09-01 -> {
+     *     "09-14" -> 3,
+     *     "14-16" -> 2,
+     *     "16-18" -> 2,
+     *     "NIGHT" -> 2
+     * }
+     *
+     * 同一セルのデータが複数存在する場合は、
+     * CONFIRMED を DRAFT より優先する。
+     *
+     * @param department 対象部署
+     * @param month 対象年月
+     * @return 日付・時間帯ごとの必要人数
      */
+    public Map<LocalDate, Map<String, Integer>> getRequirementMap(
+            String department,
+            YearMonth month) {
 
-    public Map<LocalDate, Map<String, Integer>> getRequirementMap(String department, YearMonth month) {
         LocalDate start = month.atDay(1);
         LocalDate end = month.atEndOfMonth();
 
         List<ShiftRequirement> entities =
-                shiftRequirementRepository.findByDepartmentAndDateBetween(department, start, end);
+                shiftRequirementRepository.findByDepartmentAndDateBetween(
+                        department,
+                        start,
+                        end
+                );
 
-        // 日付順に扱いたいため LinkedHashMap を使用（全日付をキーとして持つ）
-        Map<LocalDate, Map<String, Integer>> result = new LinkedHashMap<>();
+        Map<LocalDate, Map<String, Integer>> result =
+                new LinkedHashMap<>();
+
         for (int day = 1; day <= month.lengthOfMonth(); day++) {
-            result.put(month.atDay(day), new LinkedHashMap<>());
+            result.put(
+                    month.atDay(day),
+                    new LinkedHashMap<>()
+            );
         }
 
-        // ★表示の優先制御用：セルごとの status を記録（CONFIRMED を優先）
-        Map<String, ShiftRequirement.Status> statusByCell = new LinkedHashMap<>();
+        /*
+         * 同一セルの状態を記録し、
+         * CONFIRMED を DRAFT より優先する。
+         */
+        Map<String, ShiftRequirement.Status> statusByCell =
+                new LinkedHashMap<>();
 
-        for (ShiftRequirement r : entities) {
-            LocalDate date = r.getDate();
-            String slot = r.getTimeSlot();
+        for (ShiftRequirement requirement : entities) {
 
-            // 月外は無視（安全策）
+            LocalDate date = requirement.getDate();
+            String timeSlot = requirement.getTimeSlot();
+
+            if (date == null || timeSlot == null) {
+                continue;
+            }
+
+            /*
+             * 対象月以外のデータは表示対象から除外する。
+             */
             if (date.isBefore(start) || date.isAfter(end)) {
                 continue;
             }
 
-            // セルキー（フォームと同じ規則に寄せると事故が減る）
-            String cellKey = ShiftRequirementForm.toKey(date, slot);
+            String cellKey = ShiftRequirementForm.toKey(
+                    date,
+                    timeSlot
+            );
 
-            ShiftRequirement.Status incoming = r.getStatus();
-            ShiftRequirement.Status existing = statusByCell.get(cellKey);
+            ShiftRequirement.Status incoming =
+                    requirement.getStatus();
 
-            // すでに CONFIRMED が入っているセルに DRAFT が来たら無視
-            if (existing == ShiftRequirement.Status.CONFIRMED && incoming == ShiftRequirement.Status.DRAFT) {
+            ShiftRequirement.Status existing =
+                    statusByCell.get(cellKey);
+
+            /*
+             * すでにCONFIRMEDの値がある場合は、
+             * 後から取得したDRAFTで上書きしない。
+             */
+            if (existing == ShiftRequirement.Status.CONFIRMED
+                    && incoming == ShiftRequirement.Status.DRAFT) {
+
                 continue;
             }
 
-            // それ以外は採用（DRAFT→CONFIRMED は上書き、同ステータスも上書き）
-            statusByCell.put(cellKey, incoming);
+            statusByCell.put(
+                    cellKey,
+                    incoming
+            );
 
             result
-                .computeIfAbsent(date, d -> new LinkedHashMap<>())
-                .put(slot, r.getRequiredCount());
+                    .computeIfAbsent(
+                            date,
+                            key -> new LinkedHashMap<>()
+                    )
+                    .put(
+                            timeSlot,
+                            requirement.getRequiredCount()
+                    );
         }
 
         return result;
     }
 
+    /**
+     * 過去に保存した必要人員から、
+     * 曜日・時間帯ごとの初期値を作成する。
+     *
+     * 戻り値の構造：
+     *
+     * Map<
+     *     DayOfWeek,
+     *     Map<String, Integer>
+     * >
+     *
+     * 例：
+     *
+     * MONDAY -> {
+     *     "09-14" -> 3,
+     *     "14-16" -> 2,
+     *     "16-18" -> 2,
+     *     "NIGHT" -> 2
+     * }
+     *
+     * 引き継ぎ対象：
+     *
+     * ・対象月の初日より前に保存された必要人員
+     * ・対象部署と一致するデータ
+     * ・対象曜日と一致するデータ
+     * ・対象時間帯と一致するデータ
+     *
+     * 同じ曜日・時間帯に複数の登録値がある場合は、
+     * 最も新しい日付の値を採用する。
+     *
+     * @param department 対象部署
+     * @param targetMonth 対象年月
+     * @return 曜日・時間帯ごとの必要人数
+     */
+    public Map<DayOfWeek, Map<String, Integer>> buildDefaultRequirementMap(
+            String department,
+            YearMonth targetMonth) {
+
+        Map<DayOfWeek, Map<String, Integer>> defaultMap =
+                new EnumMap<>(DayOfWeek.class);
+
+        if (department == null
+                || department.isBlank()
+                || targetMonth == null) {
+
+            return defaultMap;
+        }
+
+        /*
+         * 例：
+         *
+         * 対象月が2026年9月の場合、
+         * 2026年9月1日より前のデータを取得する。
+         */
+        LocalDate targetMonthStart = targetMonth.atDay(1);
+
+        List<ShiftRequirement> previousRequirements =
+                shiftRequirementRepository
+                        .findByDepartmentAndDateBeforeOrderByDateDesc(
+                                department,
+                                targetMonthStart
+                        );
+
+        for (ShiftRequirement requirement : previousRequirements) {
+
+            LocalDate date = requirement.getDate();
+            String timeSlot = requirement.getTimeSlot();
+            Integer requiredCount = requirement.getRequiredCount();
+
+            /*
+             * 不完全なデータは引き継ぎ対象外とする。
+             */
+            if (date == null
+                    || timeSlot == null
+                    || requiredCount == null) {
+
+                continue;
+            }
+
+            /*
+             * 現在の画面で使用している時間帯だけを対象にする。
+             */
+            if (!TIME_SLOTS.contains(timeSlot)) {
+                continue;
+            }
+
+            /*
+             * 不正な負数データは初期値に使用しない。
+             */
+            if (requiredCount < 0) {
+                continue;
+            }
+
+            DayOfWeek dayOfWeek = date.getDayOfWeek();
+
+            Map<String, Integer> valuesByTimeSlot =
+                    defaultMap.computeIfAbsent(
+                            dayOfWeek,
+                            key -> new LinkedHashMap<>()
+                    );
+
+            /*
+             * Repositoryは日付の降順で取得するため、
+             * 最初に登録した値が最も新しい値になる。
+             *
+             * putIfAbsentにより、
+             * 古い値による上書きを防ぐ。
+             */
+            valuesByTimeSlot.putIfAbsent(
+                    timeSlot,
+                    requiredCount
+            );
+        }
+
+        return defaultMap;
+    }
 
     /**
-     * シフト生成画面（generate.html）表示用に、
-     * 指定した部署・年月の必要人員を詰めたフォームオブジェクトを組み立てる。
+     * シフト生成画面用の必要人員フォームを作成する。
      *
-     * ・requiredCounts（Map）に「yyyy-MM-dd_timeSlot」をキーとして値を詰める。
-     * ・DBに値がないセルは 0 を初期値として詰める（画面側で空欄にならないようにする）。
+     * 初期値の優先順位：
+     *
+     * 1. 対象月に保存済みの値
+     * 2. 同じ部署、曜日、時間帯の直近の過去登録値
+     * 3. 0
+     *
+     * このメソッドではDBへの保存は行わない。
+     *
+     * @param department 対象部署
+     * @param month 対象年月
+     * @return 必要人員フォーム
      */
-    public ShiftRequirementForm buildForm(String department, YearMonth month) {
-        Map<LocalDate, Map<String, Integer>> requirementMap = getRequirementMap(department, month);
+    public ShiftRequirementForm buildForm(
+            String department,
+            YearMonth month) {
+
+        /*
+         * 対象月に保存済みの必要人員を取得する。
+         */
+        Map<LocalDate, Map<String, Integer>> requirementMap =
+                getRequirementMap(
+                        department,
+                        month
+                );
+
+        /*
+         * 過去の登録値から、
+         * 曜日・時間帯ごとの初期値を作成する。
+         */
+        Map<DayOfWeek, Map<String, Integer>> defaultRequirementMap =
+                buildDefaultRequirementMap(
+                        department,
+                        month
+                );
 
         ShiftRequirementForm form = new ShiftRequirementForm();
+
         form.setDepartment(department);
         form.setYear(month.getYear());
         form.setMonth(month.getMonthValue());
 
-        // ★ここが肝：画面が参照するのはフォームの requiredCounts なので、DB値をここに詰め戻す
         for (int day = 1; day <= month.lengthOfMonth(); day++) {
+
             LocalDate date = month.atDay(day);
-            Map<String, Integer> perSlot = requirementMap.getOrDefault(date, Map.of());
+
+            /*
+             * 対象日の保存済み必要人員。
+             */
+            Map<String, Integer> savedValues =
+                    requirementMap.getOrDefault(
+                            date,
+                            Map.of()
+                    );
+
+            /*
+             * 対象曜日の過去登録値。
+             */
+            Map<String, Integer> defaultValues =
+                    defaultRequirementMap.getOrDefault(
+                            date.getDayOfWeek(),
+                            Map.of()
+                    );
 
             for (String timeSlot : TIME_SLOTS) {
-                int count = perSlot.getOrDefault(timeSlot, 0);
-                String key = ShiftRequirementForm.toKey(date, timeSlot);
-                form.getRequiredCounts().put(key, count);
+
+                int requiredCount;
+
+                /*
+                 * containsKeyで判定することで、
+                 * 保存済みの「0人」と未登録を区別する。
+                 */
+                if (savedValues.containsKey(timeSlot)) {
+
+                    Integer savedCount = savedValues.get(timeSlot);
+
+                    requiredCount =
+                            savedCount != null ? savedCount : 0;
+
+                } else {
+
+                    requiredCount =
+                            defaultValues.getOrDefault(
+                                    timeSlot,
+                                    0
+                            );
+                }
+
+                String key = ShiftRequirementForm.toKey(
+                        date,
+                        timeSlot
+                );
+
+                form.getRequiredCounts().put(
+                        key,
+                        requiredCount
+                );
             }
         }
 
@@ -155,138 +393,229 @@ public class ShiftRequirementService {
     }
 
     // ======================================================================
-    // 保存系（Controller action 分岐に対応）
+    // 保存系：Controller の action に応じて処理を分岐
     // ======================================================================
 
     /**
-     * 一時保存（下書きとして保存）
-     * - Controller の action が未指定/その他 の場合に呼ばれる想定。
-     */
-    @Transactional
-    public void saveDraftFromForm(ShiftRequirementForm form) {
-        saveFromFormWithStatus(form, ShiftRequirement.Status.DRAFT);
-    }
-
-    /**
-     * 確定（生成で参照する正式値として保存）
-     * - Controller の action=CONFIRMED の場合に呼ばれる想定。
-     */
-    @Transactional
-    public void saveConfirmedFromForm(ShiftRequirementForm form) {
-        saveFromFormWithStatus(form, ShiftRequirement.Status.CONFIRMED);
-    }
-
-    /**
-     * 確定解除（当月・部署の確定データを解除して下書きに戻す）
-     * - Controller の action=UNCONFIRM の場合に呼ばれる想定。
+     * 必要人員をDRAFT状態で一時保存する。
      *
-     * ※現状設計は 1セル=1レコード なので「CONFIRMED → DRAFT」へ一括更新するだけで成立する。
+     * @param form 必要人員フォーム
      */
     @Transactional
-    public void unconfirm(String department, int year, int month) {
+    public void saveDraftFromForm(
+            ShiftRequirementForm form) {
+
+        saveFromFormWithStatus(
+                form,
+                ShiftRequirement.Status.DRAFT
+        );
+    }
+
+    /**
+     * 必要人員をCONFIRMED状態で確定保存する。
+     *
+     * @param form 必要人員フォーム
+     */
+    @Transactional
+    public void saveConfirmedFromForm(
+            ShiftRequirementForm form) {
+
+        saveFromFormWithStatus(
+                form,
+                ShiftRequirement.Status.CONFIRMED
+        );
+    }
+
+    /**
+     * 対象部署・対象月の確定済み必要人員を、
+     * 一括でDRAFT状態に戻す。
+     *
+     * @param department 対象部署
+     * @param year 対象年
+     * @param month 対象月
+     */
+    @Transactional
+    public void unconfirm(
+            String department,
+            int year,
+            int month) {
+
         if (department == null || department.isBlank()) {
             return;
         }
 
-        YearMonth ym = YearMonth.of(year, month);
-        LocalDate start = ym.atDay(1);
-        LocalDate end = ym.atEndOfMonth();
+        YearMonth yearMonth = YearMonth.of(
+                year,
+                month
+        );
 
-        // 更新件数が必要なら戻り値（int）を受けてログ出力してもOK
-        shiftRequirementRepository.unconfirmInMonth(department, start, end);
+        LocalDate start = yearMonth.atDay(1);
+        LocalDate end = yearMonth.atEndOfMonth();
+
+        shiftRequirementRepository.unconfirmInMonth(
+                department,
+                start,
+                end
+        );
     }
 
     // ======================================================================
-    // 既存互換：呼び出し元が残っていても動くようにしておく
+    // 既存互換：従来の保存処理
     // ======================================================================
 
     /**
-     * 既存互換：従来どおり「フォーム保存=下書き保存」として扱う。
-     * 既存 Controller が saveFromForm(form) を呼んでいても破綻しないように残す。
+     * 従来の保存処理。
+     *
+     * 既存の呼び出し元との互換性のため、
+     * DRAFT保存へ処理を委譲する。
+     *
+     * @param form 必要人員フォーム
      */
     @Transactional
-    public void saveFromForm(ShiftRequirementForm form) {
+    public void saveFromForm(
+            ShiftRequirementForm form) {
+
         saveDraftFromForm(form);
     }
 
     // ======================================================================
-    // 内部共通（フォーム保存の本体）
+    // 内部共通：フォーム保存
     // ======================================================================
 
     /**
-     * フォームから送信された必要人員を、指定された status（DRAFT/CONFIRMED）として保存する。
+     * フォームの必要人員を、
+     * 指定された保存状態で登録・更新する。
      *
-     * ・Map の key（yyyy-MM-dd_timeSlot）を分解して date と timeSlot を復元する。
-     * ・value が null の場合は 0 として扱い保存する（「空欄＝0人」で上書きする運用）。
-     * ・フォームに紛れた “月外データ” は保存しない（安全策）。
+     * @param form 必要人員フォーム
+     * @param status 保存状態
      */
     @Transactional
-    protected void saveFromFormWithStatus(ShiftRequirementForm form, ShiftRequirement.Status status) {
-        String dept = form.getDepartment();
-        if (dept == null || dept.isBlank()) {
-            return; // 異常入力の保険（必要なら例外にしてOK）
+    protected void saveFromFormWithStatus(
+            ShiftRequirementForm form,
+            ShiftRequirement.Status status) {
+
+        String department = form.getDepartment();
+
+        if (department == null || department.isBlank()) {
+            return;
         }
 
-        Map<String, Integer> counts = form.getRequiredCounts();
+        Map<String, Integer> counts =
+                form.getRequiredCounts();
+
         if (counts == null || counts.isEmpty()) {
             return;
         }
 
-        YearMonth ym = YearMonth.of(form.getYear(), form.getMonth());
-        LocalDate start = ym.atDay(1);
-        LocalDate end = ym.atEndOfMonth();
+        YearMonth yearMonth = YearMonth.of(
+                form.getYear(),
+                form.getMonth()
+        );
 
-        for (Map.Entry<String, Integer> e : counts.entrySet()) {
-            String key = e.getKey(); // "yyyy-MM-dd_timeSlot"
+        LocalDate start = yearMonth.atDay(1);
+        LocalDate end = yearMonth.atEndOfMonth();
+
+        for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+
+            String key = entry.getKey();
+
+            /*
+             * キーの形式：
+             *
+             * yyyy-MM-dd_timeSlot
+             *
+             * 例：
+             * 2026-09-01_09-14
+             */
             if (key == null || !key.contains("_")) {
                 continue;
             }
 
-            String[] parts = key.split("_", 2);
+            String[] parts = key.split(
+                    "_",
+                    2
+            );
+
             if (parts.length != 2) {
                 continue;
             }
 
             LocalDate date;
+
             try {
+
                 date = LocalDate.parse(parts[0]);
-            } catch (Exception ex) {
-                continue; // 想定外キーは無視
+
+            } catch (Exception exception) {
+
+                continue;
             }
 
-            // 月外のキーが紛れた場合は無視（安全策）
+            /*
+             * 対象月以外の日付は保存しない。
+             */
             if (date.isBefore(start) || date.isAfter(end)) {
                 continue;
             }
 
             String timeSlot = parts[1];
 
-            // 画面で空欄にされた場合は null になり得る → 0として保存
-            int requiredCount = (e.getValue() == null) ? 0 : e.getValue();
+            /*
+             * 空欄は0人として保存する。
+             */
+            int requiredCount =
+                    entry.getValue() == null
+                            ? 0
+                            : entry.getValue();
 
-            upsertRequirement(dept, date, timeSlot, requiredCount, status);
+            upsertRequirement(
+                    department,
+                    date,
+                    timeSlot,
+                    requiredCount,
+                    status
+            );
         }
     }
 
     // ======================================================================
-    // アップサート（新規 or 更新）
+    // アップサート：必要人員の新規登録または更新
     // ======================================================================
 
     /**
-     * 部署＋日付＋時間帯をキーに、必要人員を1件アップサート（新規 or 更新）する。
+     * 部署・日付・時間帯に一致する必要人員を、
+     * 新規登録または更新する。
      *
-     * ※ requiredCount は「0も有効値」として保存する運用。
-     *    0を保存したくない（未入力はレコード自体を消したい）運用の場合は
-     *    requiredCount==0 のとき delete に分岐する等へ変更してください。
-     *
-     * ※本メソッドは「主キー（id）」に依存しない。
-     *   （id は DB 採番であり、業務上の一意性は date+department+timeSlot で決まるため）
+     * @param department 対象部署
+     * @param date 対象日
+     * @param timeSlot 時間帯
+     * @param requiredCount 必要人数
+     * @param status 保存状態
      */
     @Transactional
-    public void upsertRequirement(String department, LocalDate date, String timeSlot, int requiredCount, ShiftRequirement.Status status) {
-        ShiftRequirement entity = shiftRequirementRepository
-                .findByDepartmentAndDateAndTimeSlot(department, date, timeSlot)
-                .orElseGet(() -> new ShiftRequirement(date, department, timeSlot, requiredCount, status));
+    public void upsertRequirement(
+            String department,
+            LocalDate date,
+            String timeSlot,
+            int requiredCount,
+            ShiftRequirement.Status status) {
+
+        ShiftRequirement entity =
+                shiftRequirementRepository
+                        .findByDepartmentAndDateAndTimeSlot(
+                                department,
+                                date,
+                                timeSlot
+                        )
+                        .orElseGet(
+                                () -> new ShiftRequirement(
+                                        date,
+                                        department,
+                                        timeSlot,
+                                        requiredCount,
+                                        status
+                                )
+                        );
 
         entity.setRequiredCount(requiredCount);
         entity.setStatus(status);
@@ -295,11 +624,27 @@ public class ShiftRequirementService {
     }
 
     /**
-     * 既存互換：status を指定しない場合は DRAFT 扱いで保存する。
-     * （以前の呼び出し箇所が残っていてもコンパイルエラーにならないようにしておく）
+     * 保存状態が指定されない場合は、
+     * DRAFTとして登録する。
+     *
+     * @param department 対象部署
+     * @param date 対象日
+     * @param timeSlot 時間帯
+     * @param requiredCount 必要人数
      */
     @Transactional
-    public void upsertRequirement(String department, LocalDate date, String timeSlot, int requiredCount) {
-        upsertRequirement(department, date, timeSlot, requiredCount, ShiftRequirement.Status.DRAFT);
+    public void upsertRequirement(
+            String department,
+            LocalDate date,
+            String timeSlot,
+            int requiredCount) {
+
+        upsertRequirement(
+                department,
+                date,
+                timeSlot,
+                requiredCount,
+                ShiftRequirement.Status.DRAFT
+        );
     }
 }
