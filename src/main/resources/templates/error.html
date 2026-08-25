@@ -1,20 +1,28 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>エラーが発生しました</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
+    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
 </head>
-
-<body>
-    <h1>エラーが発生しました</h1>
-
-    <p th:text="${errorMessage}">
-        予期しないエラーが発生しました。
-        時間をおいて再度お試しください。
-    </p>
-
-    <a th:href="@{/home}">ホームへ戻る</a>
+<body class="app-page">
+    <header class="app-header">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+            <span class="brand__mark" aria-hidden="true">S</span>
+            <span>ShiftManager</span>
+        </a>
+        <a class="header-back-link" th:href="@{/home}">← ホームへ戻る</a>
+    </header>
+    <main class="content-main content-main--form">
+        <section class="error-card" aria-labelledby="error-title">
+            <span class="error-card__code">ERROR</span>
+            <h1 id="error-title">エラーが発生しました</h1>
+            <p th:text="${errorMessage} ?: '予期しないエラーが発生しました。時間をおいて再度お試しください。'">予期しないエラーが発生しました。</p>
+            <a class="button button--primary" th:href="@{/home}">ホームへ戻る</a>
+        </section>
+    </main>
+    <footer class="app-footer">© ShiftManager</footer>
 </body>
-
 </html>
