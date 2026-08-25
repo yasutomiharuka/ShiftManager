@@ -1,15 +1,32 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ユーザー削除完了</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
+    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
 </head>
-<body>
-    <h2>ユーザー削除完了</h2>
-
-    <p>ユーザーの削除が完了しました。</p>
-
-    <a th:href="@{/home}">ホームへ</a>
-    <a th:href="@{/user/list}">ユーザー一覧へ</a>
+<body class="app-page">
+    <header class="app-header">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+            <span class="brand__mark" aria-hidden="true">S</span>
+            <span>ShiftManager</span>
+        </a>
+        <a class="header-back-link" th:href="@{/user/list}">← ユーザー一覧へ戻る</a>
+    </header>
+    <main class="content-main content-main--form">
+        <section class="completion-card" aria-labelledby="completion-title">
+            <span class="completion-card__icon" aria-hidden="true">✓</span>
+            <p class="eyebrow">COMPLETED</p>
+            <h1 id="completion-title">ユーザー削除完了</h1>
+            <p>ユーザーの削除が完了しました。</p>
+            <div class="detail-actions">
+                <a class="button button--secondary" th:href="@{/home}">ホームへ</a>
+                <a class="button button--primary" th:href="@{/user/list}">ユーザー一覧へ</a>
+            </div>
+        </section>
+    </main>
+    <footer class="app-footer">© ShiftManager</footer>
 </body>
 </html>
