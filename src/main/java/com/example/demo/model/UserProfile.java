@@ -35,6 +35,14 @@ public class UserProfile {
 
     @Column(name = "last_name", nullable = false, length = 50)
     private String lastName;
+    
+    // 姓のフリガナ
+    @Column(name = "first_name_kana", length = 50)
+    private String firstNameKana;
+
+    // 名のフリガナ
+    @Column(name = "last_name_kana", length = 50)
+    private String lastNameKana;
 
     @Column(name = "birth_date")
     private LocalDate birthDate;
@@ -121,13 +129,25 @@ public class UserProfile {
     }
 
     // 全フィールド（id以外）を含むコンストラクタ
-    public UserProfile(String username, String password, String role, String firstName, String lastName,
-                       LocalDate birthDate, String gender, String employmentType, String department) {
+    public UserProfile(
+            String username,
+            String password,
+            String role,
+            String firstName,
+            String lastName,
+            String firstNameKana,
+            String lastNameKana,
+            LocalDate birthDate,
+            String gender,
+            String employmentType,
+            String department) {
         this.username = username;
         this.password = password;
         this.role = role != null ? role : "USER"; // null の場合デフォルト値
         this.firstName = firstName;
         this.lastName = lastName;
+        this.firstNameKana = firstNameKana;
+        this.lastNameKana = lastNameKana;
         this.birthDate = birthDate;
         this.gender = gender != null ? gender : "未設定"; // null の場合デフォルト値
         this.employmentType = employmentType != null ? employmentType : "未設定"; // null の場合デフォルト値
@@ -196,6 +216,22 @@ public class UserProfile {
  
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+    
+    public String getFirstNameKana() {
+        return firstNameKana;
+    }
+
+    public void setFirstNameKana(String firstNameKana) {
+        this.firstNameKana = firstNameKana;
+    }
+
+    public String getLastNameKana() {
+        return lastNameKana;
+    }
+
+    public void setLastNameKana(String lastNameKana) {
+        this.lastNameKana = lastNameKana;
     }
 
     public LocalDate getBirthDate() {
@@ -397,6 +433,8 @@ public class UserProfile {
                ", role='" + role + '\'' +
                ", firstName='" + firstName + '\'' +
                ", lastName='" + lastName + '\'' +
+               ", firstNameKana='" + firstNameKana + '\'' +
+               ", lastNameKana='" + lastNameKana + '\'' +
                ", birthDate=" + birthDate +
                ", gender='" + gender + '\'' +
                ", employmentType='" + employmentType + '\'' +

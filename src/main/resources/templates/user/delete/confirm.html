@@ -4,18 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ユーザー削除確認</title>
+
+    <!-- 共通デザインとユーザー管理画面のスタイルシート -->
     <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
     <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
 </head>
+
 <body class="app-page">
+    <!-- 共通ヘッダーとユーザー一覧への戻りリンク -->
     <header class="app-header">
-        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
+        <a class="brand brand--dark" th:href="@{/home}" href="/home"
+           aria-label="ShiftManager ホーム">
             <span class="brand__mark" aria-hidden="true">S</span>
             <span>ShiftManager</span>
         </a>
-        <a class="header-back-link" th:href="@{/user/list}">← ユーザー一覧へ戻る</a>
+        <a class="header-back-link" th:href="@{/user/list}">
+            ← ユーザー一覧へ戻る
+        </a>
     </header>
+
     <main class="content-main content-main--form">
+        <!-- 画面タイトルと説明 -->
         <div class="page-heading">
             <div>
                 <p class="eyebrow">DELETE USER</p>
@@ -23,6 +32,8 @@
                 <p>削除対象のユーザー情報をご確認ください。</p>
             </div>
         </div>
+
+        <!-- 権限・性別・雇用形態・所属の表示用メッセージを取得する -->
         <section class="panel detail-panel" th:with="
                 roleKey='role.' + ${user.role},
                 genderKey='gender.' + ${user.gender},
@@ -33,35 +44,102 @@
                 employmentTypeMsg=${#messages.msg(employmentTypeKey)},
                 departmentMsg=${#messages.msg(departmentKey)}
             ">
-            <p class="notice-banner notice-banner--danger" role="alert">削除したユーザー情報は元に戻せません。</p>
+
+            <!-- ユーザー削除は取り消せないことを表示する -->
+            <p class="notice-banner notice-banner--danger" role="alert">
+                削除したユーザー情報は元に戻せません。
+            </p>
+
+            <!-- 削除対象のユーザー情報 -->
             <table class="detail-table">
                 <tbody>
-                    <tr><th scope="row">ユーザーID</th><td th:text="${user.id}"></td></tr>
-                    <tr><th scope="row">ユーザー名</th><td th:text="${user.username}"></td></tr>
-                    <tr><th scope="row">姓</th><td th:text="${user.firstName}"></td></tr>
-                    <tr><th scope="row">名</th><td th:text="${user.lastName}"></td></tr>
-                    <tr><th scope="row">生年月日</th><td th:text="${user.birthDate}"></td></tr>
-                    <tr><th scope="row">性別</th><td th:text="${genderMsg}"></td></tr>
-                    <tr><th scope="row">雇用形態</th><td th:text="${employmentTypeMsg}"></td></tr>
-                    <tr><th scope="row">所属</th><td th:text="${departmentMsg}"></td></tr>
+                    <tr>
+                        <th scope="row">ユーザーID</th>
+                        <td th:text="${user.id}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">ユーザー名</th>
+                        <td th:text="${user.username}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">姓</th>
+                        <td th:text="${user.firstName}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">名</th>
+                        <td th:text="${user.lastName}"></td>
+                    </tr>
+
+                    <!-- 姓・名のフリガナ -->
+                    <tr>
+                        <th scope="row">姓（フリガナ）</th>
+                        <td th:text="${user.firstNameKana ?: '未登録'}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">名（フリガナ）</th>
+                        <td th:text="${user.lastNameKana ?: '未登録'}"></td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">生年月日</th>
+                        <td th:text="${user.birthDate}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">性別</th>
+                        <td th:text="${genderMsg}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">雇用形態</th>
+                        <td th:text="${employmentTypeMsg}"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">所属</th>
+                        <td th:text="${departmentMsg}"></td>
+                    </tr>
                 </tbody>
             </table>
-            <form class="detail-actions" th:action="@{/user/delete/{id}(id=${user.id})}" method="post">
-                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+            <!-- 削除対象のユーザー情報を削除処理へ送信する -->
+            <form class="detail-actions"
+                  th:action="@{/user/delete/{id}(id=${user.id})}"
+                  method="post">
+
+                <!-- CSRF 対策用のトークン -->
+                <input type="hidden" th:name="${_csrf.parameterName}"
+                       th:value="${_csrf.token}">
+
+                <!-- 削除対象の基本情報 -->
                 <input type="hidden" name="id" th:value="${user.id}">
                 <input type="hidden" name="username" th:value="${user.username}">
                 <input type="hidden" name="firstName" th:value="${user.firstName}">
                 <input type="hidden" name="lastName" th:value="${user.lastName}">
+
+                <!-- 姓・名のフリガナも削除処理へ引き継ぐ -->
+                <input type="hidden" name="firstNameKana"
+                       th:value="${user.firstNameKana}">
+                <input type="hidden" name="lastNameKana"
+                       th:value="${user.lastNameKana}">
+
                 <input type="hidden" name="role" th:value="${user.role}">
                 <input type="hidden" name="birthDate" th:value="${user.birthDate}">
                 <input type="hidden" name="gender" th:value="${user.gender}">
-                <input type="hidden" name="employmentType" th:value="${user.employmentType}">
-                <input type="hidden" name="department" th:value="${user.department}">
-                <button class="button button--secondary" type="button" onclick="history.back()">戻る</button>
-                <button class="button button--danger" type="submit">削除する</button>
+                <input type="hidden" name="employmentType"
+                       th:value="${user.employmentType}">
+                <input type="hidden" name="department"
+                       th:value="${user.department}">
+
+                <!-- 前の画面へ戻る、またはユーザーを削除する -->
+                <button class="button button--secondary"
+                        type="button" onclick="history.back()">
+                    戻る
+                </button>
+                <button class="button button--danger" type="submit">
+                    削除する
+                </button>
             </form>
         </section>
     </main>
+
     <footer class="app-footer">© ShiftManager</footer>
 </body>
 </html>

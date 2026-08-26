@@ -16,119 +16,211 @@ import com.example.demo.repository.UserProfileRepository;
 @Service
 public class UserProfileService {
 
-    private static final Logger logger = LoggerFactory.getLogger(UserProfileService.class);
+    private static final Logger logger =
+            LoggerFactory.getLogger(UserProfileService.class);
+
     private final UserProfileRepository userProfileRepository;
     private final PasswordEncoder passwordEncoder;
 
-    public UserProfileService(UserProfileRepository userProfileRepository, PasswordEncoder passwordEncoder) {
+    public UserProfileService(
+            UserProfileRepository userProfileRepository,
+            PasswordEncoder passwordEncoder
+    ) {
         this.userProfileRepository = userProfileRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     /**
-     * ユーザー情報を保存 (新規登録時はパスワードを必ずハッシュ化)
-     * @param userProfileDto - 保存するユーザー情報のDTO
+     * ユーザー情報を保存する。
+     *
+     * 新規登録時はパスワードを必ずハッシュ化する。
+     *
+     * @param userProfileDto 保存するユーザー情報のDTO
      * @return 保存されたユーザー情報のDTO
-     * UserProfileDto → UserProfile
      */
-    public UserProfileDto saveUserProfile(UserProfileDto userProfileDto) {
-        UserProfile userProfile = convertToEntity(userProfileDto); // DTOをエンティティに変換
-        userProfile.setPassword(passwordEncoder.encode(userProfile.getPassword())); // パスワードをハッシュ化
-        UserProfile savedUser = userProfileRepository.save(userProfile);
-        return convertToDto(savedUser); // DTOに変換して返す
+    public UserProfileDto saveUserProfile(
+            UserProfileDto userProfileDto
+    ) {
+
+        // DTOをエンティティに変換する。
+        UserProfile userProfile =
+                convertToEntity(userProfileDto);
+
+        // 新規登録時のパスワードをハッシュ化する。
+        userProfile.setPassword(
+                passwordEncoder.encode(
+                        userProfile.getPassword()
+                )
+        );
+
+        // ユーザー情報を保存する。
+        UserProfile savedUser =
+                userProfileRepository.save(userProfile);
+
+        // 保存結果をDTOへ変換して返す。
+        return convertToDto(savedUser);
     }
-    
-    /**
-     * ユーザー情報をidで検索して取得
-     * @param id - ユーザーID
-     * @return Optional<UserProfileDto>
-     * UserProfile → UserProfileDto
-     */
-    public Optional<UserProfileDto> getUserProfileById(Long id) {
-        return userProfileRepository.findById(id).map(this::convertToDto);
-    }
-    
 
     /**
-     * ユーザー情報を更新
-     * @param id - ユーザーID
-     * @param userProfileDto - 更新するユーザー情報のDTO
-     * @return 更新成功時は Optional<UserProfileDto>、失敗時は Optional.empty()
-     * UserProfileDto → UserProfile
+     * ユーザー情報をIDで検索して取得する。
+     *
+     * @param id ユーザーID
+     * @return 対象ユーザーのDTO
      */
-    public Optional<UserProfileDto> updateUserProfile(Long id, UserProfileDto userProfileDto) {
-        return userProfileRepository.findById(id)
+    public Optional<UserProfileDto> getUserProfileById(
+            Long id
+    ) {
+
+        return userProfileRepository
+                .findById(id)
+                .map(this::convertToDto);
+    }
+
+    /**
+     * ユーザー情報を更新する。
+     *
+     * 通常の更新ではパスワードを変更しない。
+     *
+     * @param id ユーザーID
+     * @param userProfileDto 更新するユーザー情報のDTO
+     * @return 更新成功時はユーザー情報、対象不存在時は空
+     */
+    public Optional<UserProfileDto> updateUserProfile(
+            Long id,
+            UserProfileDto userProfileDto
+    ) {
+
+        return userProfileRepository
+                .findById(id)
                 .map(existingUser -> {
-                    updateEntityFromDto(existingUser, userProfileDto); // DTOの内容を適用
-                    return userProfileRepository.save(existingUser); // 更新後のエンティティを保存
+
+                    // DTOの入力内容を既存エンティティへ反映する。
+                    updateEntityFromDto(
+                            existingUser,
+                            userProfileDto
+                    );
+
+                    // 更新後のエンティティを保存する。
+                    return userProfileRepository.save(
+                            existingUser
+                    );
                 })
-                .map(this::convertToDto); // 更新後のデータをDTOに変換して返す
+                .map(this::convertToDto);
     }
 
+    /**
+     * ユーザー情報を更新する。
+     *
+     * 必要に応じてパスワードも更新する。
+     *
+     * @param id ユーザーID
+     * @param userProfileDto 更新するユーザー情報のDTO
+     * @param updatePassword パスワードを更新するかどうか
+     * @return 更新成功時はユーザー情報、対象不存在時は空
+     */
+    public Optional<UserProfileDto> updateUserProfile(
+            Long id,
+            UserProfileDto userProfileDto,
+            boolean updatePassword
+    ) {
+
+        return userProfileRepository
+                .findById(id)
+                .map(userProfile -> {
+
+                    updateEntityFromDto(
+                            userProfile,
+                            userProfileDto,
+                            updatePassword
+                    );
+
+                    UserProfile updatedUser =
+                            userProfileRepository.save(
+                                    userProfile
+                            );
+
+                    return convertToDto(updatedUser);
+                });
+    }
 
     /**
-     * ユーザー情報を更新 (パスワード更新のオプション付き)
-     * @param id - ユーザーID
-     * @param userProfileDto - 更新するユーザー情報のDTO
-     * @param updatePassword - パスワードを更新するかどうか
-     * @return 更新成功時は Optional<UserProfileDto>、失敗時は Optional.empty()
-     */ 
-    public Optional<UserProfileDto> updateUserProfile(Long id, UserProfileDto userProfileDto, boolean updatePassword) {
-        return userProfileRepository.findById(id)
-            .map(userProfile -> {
-                updateEntityFromDto(userProfile, userProfileDto, updatePassword);
-                return convertToDto(userProfileRepository.save(userProfile));
-            });
-    }
-    
-    
-    /**
-     * ユーザー情報を削除
-     * @param id - ユーザーID
-     * @return 削除成功時は true、失敗時は false
+     * ユーザー情報を削除する。
+     *
+     * @param id ユーザーID
+     * @return 削除成功時はtrue、対象不存在時はfalse
      */
     public boolean deleteUserProfile(Long id) {
+
         if (userProfileRepository.existsById(id)) {
+
             userProfileRepository.deleteById(id);
-            logger.info("User profile deleted: ID {}", id);
+
+            logger.info(
+                    "User profile deleted: ID {}",
+                    id
+            );
+
             return true;
         }
-        logger.warn("User profile not found for deletion: ID {}", id);
+
+        logger.warn(
+                "User profile not found for deletion: ID {}",
+                id
+        );
+
         return false;
     }
 
     /**
-     * ユーザー一覧を取得
-     * @return ユーザー情報のリスト
-     * List<UserProfile> → List<UserProfileDto>
+     * ユーザー一覧を取得する。
+     *
+     * @return ユーザー情報のDTO一覧
      */
     public List<UserProfileDto> getAllUserProfiles() {
-        return userProfileRepository.findAll()
+
+        return userProfileRepository
+                .findAll()
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
     }
-    
-    // ========== 変換処理 ==========
-    // サービスクラス (UserProfileService) の各メソッドで直接変換処理は行わない
+
+    // =========================================================
+    // エンティティとDTOの変換処理
+    // =========================================================
 
     /**
-     * UserProfile → UserProfileDto
-     * @param userProfile - 変換対象のエンティティ
-     * @return UserProfileDto
+     * UserProfileエンティティをUserProfileDtoへ変換する。
+     *
+     * 一覧表示、詳細表示、編集画面表示などで使用する。
+     *
+     * @param entity 変換対象のエンティティ
+     * @return ユーザー情報のDTO
      */
-    private UserProfileDto convertToDto(UserProfile entity) {
+    private UserProfileDto convertToDto(
+            UserProfile entity
+    ) {
+
         UserProfileDto dto = new UserProfileDto();
+
+        // ユーザー基本情報。
         dto.setId(entity.getId());
         dto.setUsername(entity.getUsername());
         dto.setRole(entity.getRole());
+
         dto.setFirstName(entity.getFirstName());
         dto.setLastName(entity.getLastName());
+
+        // 姓・名のフリガナ。
+        dto.setFirstNameKana(entity.getFirstNameKana());
+        dto.setLastNameKana(entity.getLastNameKana());
+
         dto.setBirthDate(entity.getBirthDate());
         dto.setGender(entity.getGender());
         dto.setEmploymentType(entity.getEmploymentType());
         dto.setDepartment(entity.getDepartment());
 
+        // 曜日別の固定休。
         dto.setMondayOff(entity.getMondayOff());
         dto.setTuesdayOff(entity.getTuesdayOff());
         dto.setWednesdayOff(entity.getWednesdayOff());
@@ -137,43 +229,93 @@ public class UserProfileService {
         dto.setSaturdayOff(entity.getSaturdayOff());
         dto.setSundayOff(entity.getSundayOff());
 
-        dto.setMondayStartTime(entity.getMondayStartTime());
-        dto.setMondayEndTime(entity.getMondayEndTime());
-        dto.setTuesdayStartTime(entity.getTuesdayStartTime());
-        dto.setTuesdayEndTime(entity.getTuesdayEndTime());
-        dto.setWednesdayStartTime(entity.getWednesdayStartTime());
-        dto.setWednesdayEndTime(entity.getWednesdayEndTime());
-        dto.setThursdayStartTime(entity.getThursdayStartTime());
-        dto.setThursdayEndTime(entity.getThursdayEndTime());
-        dto.setFridayStartTime(entity.getFridayStartTime());
-        dto.setFridayEndTime(entity.getFridayEndTime());
-        dto.setSaturdayStartTime(entity.getSaturdayStartTime());
-        dto.setSaturdayEndTime(entity.getSaturdayEndTime());
-        dto.setSundayStartTime(entity.getSundayStartTime());
-        dto.setSundayEndTime(entity.getSundayEndTime());
+        // 曜日別の勤務時間。
+        dto.setMondayStartTime(
+                entity.getMondayStartTime()
+        );
+        dto.setMondayEndTime(
+                entity.getMondayEndTime()
+        );
+
+        dto.setTuesdayStartTime(
+                entity.getTuesdayStartTime()
+        );
+        dto.setTuesdayEndTime(
+                entity.getTuesdayEndTime()
+        );
+
+        dto.setWednesdayStartTime(
+                entity.getWednesdayStartTime()
+        );
+        dto.setWednesdayEndTime(
+                entity.getWednesdayEndTime()
+        );
+
+        dto.setThursdayStartTime(
+                entity.getThursdayStartTime()
+        );
+        dto.setThursdayEndTime(
+                entity.getThursdayEndTime()
+        );
+
+        dto.setFridayStartTime(
+                entity.getFridayStartTime()
+        );
+        dto.setFridayEndTime(
+                entity.getFridayEndTime()
+        );
+
+        dto.setSaturdayStartTime(
+                entity.getSaturdayStartTime()
+        );
+        dto.setSaturdayEndTime(
+                entity.getSaturdayEndTime()
+        );
+
+        dto.setSundayStartTime(
+                entity.getSundayStartTime()
+        );
+        dto.setSundayEndTime(
+                entity.getSundayEndTime()
+        );
 
         return dto;
-     }
+    }
 
     /**
-     * UserProfileDto → UserProfile
-     * @param userProfileDto - 変換対象のDTO
-     * @param updatePassword - パスワードをハッシュ化するかどうか
-     * @return UserProfile
+     * UserProfileDtoをUserProfileエンティティへ変換する。
+     *
+     * 新規ユーザー登録時に使用する。
+     *
+     * @param dto 変換対象のDTO
+     * @return ユーザー情報のエンティティ
      */
-    private UserProfile convertToEntity(UserProfileDto dto) {
+    private UserProfile convertToEntity(
+            UserProfileDto dto
+    ) {
+
+        // 基本情報とフリガナはコンストラクターで設定する。
         UserProfile entity = new UserProfile(
-            dto.getUsername(),
-            dto.getPassword(),
-            dto.getRole(),
-            dto.getFirstName(),
-            dto.getLastName(),
-            dto.getBirthDate(),
-            dto.getGender(),
-            dto.getEmploymentType(),
-            dto.getDepartment()
+
+                dto.getUsername(),
+                dto.getPassword(),
+                dto.getRole(),
+
+                dto.getFirstName(),
+                dto.getLastName(),
+
+                // 姓・名のフリガナ。
+                dto.getFirstNameKana(),
+                dto.getLastNameKana(),
+
+                dto.getBirthDate(),
+
+                dto.getGender(),
+                dto.getEmploymentType(),
+                dto.getDepartment()
         );
-        
+
+        // 曜日別の固定休。
         entity.setMondayOff(dto.getMondayOff());
         entity.setTuesdayOff(dto.getTuesdayOff());
         entity.setWednesdayOff(dto.getWednesdayOff());
@@ -182,44 +324,113 @@ public class UserProfileService {
         entity.setSaturdayOff(dto.getSaturdayOff());
         entity.setSundayOff(dto.getSundayOff());
 
-        entity.setMondayStartTime(dto.getMondayStartTime());
-        entity.setMondayEndTime(dto.getMondayEndTime());
-        entity.setTuesdayStartTime(dto.getTuesdayStartTime());
-        entity.setTuesdayEndTime(dto.getTuesdayEndTime());
-        entity.setWednesdayStartTime(dto.getWednesdayStartTime());
-        entity.setWednesdayEndTime(dto.getWednesdayEndTime());
-        entity.setThursdayStartTime(dto.getThursdayStartTime());
-        entity.setThursdayEndTime(dto.getThursdayEndTime());
-        entity.setFridayStartTime(dto.getFridayStartTime());
-        entity.setFridayEndTime(dto.getFridayEndTime());
-        entity.setSaturdayStartTime(dto.getSaturdayStartTime());
-        entity.setSaturdayEndTime(dto.getSaturdayEndTime());
-        entity.setSundayStartTime(dto.getSundayStartTime());
-        entity.setSundayEndTime(dto.getSundayEndTime());     
+        // 曜日別の勤務時間。
+        entity.setMondayStartTime(
+                dto.getMondayStartTime()
+        );
+        entity.setMondayEndTime(
+                dto.getMondayEndTime()
+        );
+
+        entity.setTuesdayStartTime(
+                dto.getTuesdayStartTime()
+        );
+        entity.setTuesdayEndTime(
+                dto.getTuesdayEndTime()
+        );
+
+        entity.setWednesdayStartTime(
+                dto.getWednesdayStartTime()
+        );
+        entity.setWednesdayEndTime(
+                dto.getWednesdayEndTime()
+        );
+
+        entity.setThursdayStartTime(
+                dto.getThursdayStartTime()
+        );
+        entity.setThursdayEndTime(
+                dto.getThursdayEndTime()
+        );
+
+        entity.setFridayStartTime(
+                dto.getFridayStartTime()
+        );
+        entity.setFridayEndTime(
+                dto.getFridayEndTime()
+        );
+
+        entity.setSaturdayStartTime(
+                dto.getSaturdayStartTime()
+        );
+        entity.setSaturdayEndTime(
+                dto.getSaturdayEndTime()
+        );
+
+        entity.setSundayStartTime(
+                dto.getSundayStartTime()
+        );
+        entity.setSundayEndTime(
+                dto.getSundayEndTime()
+        );
 
         return entity;
     }
-      
 
     /**
-     * DTO の内容をエンティティに適用 (更新用・パスワード更新オプションつき)
-     * @param entity - 反映先のエンティティ
-     * @param dto - 反映するデータ
-     * @param updatePassword - パスワードを更新するかどうか
+     * DTOの内容を既存エンティティへ反映する。
+     *
+     * 必要に応じてパスワードも更新する。
+     *
+     * @param entity 反映先のエンティティ
+     * @param dto 反映するユーザー情報
+     * @param updatePassword パスワードを更新するかどうか
      */
-    private void updateEntityFromDto(UserProfile entity, UserProfileDto dto, boolean updatePassword) {
+    private void updateEntityFromDto(
+            UserProfile entity,
+            UserProfileDto dto,
+            boolean updatePassword
+    ) {
+
         entity.setUsername(dto.getUsername());
-        if (updatePassword && dto.getPassword() != null && !dto.getPassword().isEmpty()) {
-            entity.setPassword(passwordEncoder.encode(dto.getPassword()));
+
+        // パスワード更新が指定され、
+        // 新しいパスワードが入力されている場合のみ変更する。
+        if (
+                updatePassword
+                && dto.getPassword() != null
+                && !dto.getPassword().isEmpty()
+        ) {
+
+            entity.setPassword(
+                    passwordEncoder.encode(
+                            dto.getPassword()
+                    )
+            );
         }
+
+        // ユーザー基本情報。
         entity.setRole(dto.getRole());
+
         entity.setFirstName(dto.getFirstName());
         entity.setLastName(dto.getLastName());
+
+        // 編集後の姓・名フリガナを反映する。
+        entity.setFirstNameKana(
+                dto.getFirstNameKana()
+        );
+        entity.setLastNameKana(
+                dto.getLastNameKana()
+        );
+
         entity.setBirthDate(dto.getBirthDate());
         entity.setGender(dto.getGender());
-        entity.setEmploymentType(dto.getEmploymentType());
+        entity.setEmploymentType(
+                dto.getEmploymentType()
+        );
         entity.setDepartment(dto.getDepartment());
-        
+
+        // 曜日別の固定休。
         entity.setMondayOff(dto.getMondayOff());
         entity.setTuesdayOff(dto.getTuesdayOff());
         entity.setWednesdayOff(dto.getWednesdayOff());
@@ -228,30 +439,74 @@ public class UserProfileService {
         entity.setSaturdayOff(dto.getSaturdayOff());
         entity.setSundayOff(dto.getSundayOff());
 
-        entity.setMondayStartTime(dto.getMondayStartTime());
-        entity.setMondayEndTime(dto.getMondayEndTime());
-        entity.setTuesdayStartTime(dto.getTuesdayStartTime());
-        entity.setTuesdayEndTime(dto.getTuesdayEndTime());
-        entity.setWednesdayStartTime(dto.getWednesdayStartTime());
-        entity.setWednesdayEndTime(dto.getWednesdayEndTime());
-        entity.setThursdayStartTime(dto.getThursdayStartTime());
-        entity.setThursdayEndTime(dto.getThursdayEndTime());
-        entity.setFridayStartTime(dto.getFridayStartTime());
-        entity.setFridayEndTime(dto.getFridayEndTime());
-        entity.setSaturdayStartTime(dto.getSaturdayStartTime());
-        entity.setSaturdayEndTime(dto.getSaturdayEndTime());
-        entity.setSundayStartTime(dto.getSundayStartTime());
-        entity.setSundayEndTime(dto.getSundayEndTime());    
+        // 曜日別の勤務時間。
+        entity.setMondayStartTime(
+                dto.getMondayStartTime()
+        );
+        entity.setMondayEndTime(
+                dto.getMondayEndTime()
+        );
+
+        entity.setTuesdayStartTime(
+                dto.getTuesdayStartTime()
+        );
+        entity.setTuesdayEndTime(
+                dto.getTuesdayEndTime()
+        );
+
+        entity.setWednesdayStartTime(
+                dto.getWednesdayStartTime()
+        );
+        entity.setWednesdayEndTime(
+                dto.getWednesdayEndTime()
+        );
+
+        entity.setThursdayStartTime(
+                dto.getThursdayStartTime()
+        );
+        entity.setThursdayEndTime(
+                dto.getThursdayEndTime()
+        );
+
+        entity.setFridayStartTime(
+                dto.getFridayStartTime()
+        );
+        entity.setFridayEndTime(
+                dto.getFridayEndTime()
+        );
+
+        entity.setSaturdayStartTime(
+                dto.getSaturdayStartTime()
+        );
+        entity.setSaturdayEndTime(
+                dto.getSaturdayEndTime()
+        );
+
+        entity.setSundayStartTime(
+                dto.getSundayStartTime()
+        );
+        entity.setSundayEndTime(
+                dto.getSundayEndTime()
+        );
     }
-    
+
     /**
-     * DTO の内容をエンティティに適用 (更新用, デフォルトはパスワードを更新しない)
+     * DTOの内容を既存エンティティへ反映する。
+     *
+     * 通常のユーザー編集ではパスワードを更新しない。
+     *
+     * @param entity 反映先のエンティティ
+     * @param dto 反映するユーザー情報
      */
-    private void updateEntityFromDto(UserProfile entity, UserProfileDto dto) {
-        updateEntityFromDto(entity, dto, false); // デフォルトでパスワードを更新しない
+    private void updateEntityFromDto(
+            UserProfile entity,
+            UserProfileDto dto
+    ) {
+
+        updateEntityFromDto(
+                entity,
+                dto,
+                false
+        );
     }
-
 }
-
-
-

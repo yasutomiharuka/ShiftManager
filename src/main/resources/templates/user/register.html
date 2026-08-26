@@ -332,7 +332,7 @@
             <!--
                 02：職員の基本情報。
 
-                氏名、生年月日、性別、雇用形態、所属部署を入力する。
+                氏名、フリガナ、生年月日、性別、雇用形態、所属部署を入力する。
             -->
             <section
                 class="form-section"
@@ -403,6 +403,62 @@
                             class="field-error"
                             th:if="${#fields.hasErrors('lastName')}"
                             th:errors="*{lastName}">
+
+                        </p>
+
+                    </div>
+
+                    <!-- 姓のフリガナ -->
+                    <div class="form-field">
+
+                        <label for="firstNameKana">
+
+                            姓（フリガナ）
+
+                            <span class="required-label">必須</span>
+
+                        </label>
+
+                        <input
+                            type="text"
+                            id="firstNameKana"
+                            th:field="*{firstNameKana}"
+                            maxlength="50"
+                            placeholder="例：ヤマダ"
+                            required>
+
+                        <p
+                            class="field-error"
+                            th:if="${#fields.hasErrors('firstNameKana')}"
+                            th:errors="*{firstNameKana}">
+
+                        </p>
+
+                    </div>
+
+                    <!-- 名のフリガナ -->
+                    <div class="form-field">
+
+                        <label for="lastNameKana">
+
+                            名（フリガナ）
+
+                            <span class="required-label">必須</span>
+
+                        </label>
+
+                        <input
+                            type="text"
+                            id="lastNameKana"
+                            th:field="*{lastNameKana}"
+                            maxlength="50"
+                            placeholder="例：タロウ"
+                            required>
+
+                        <p
+                            class="field-error"
+                            th:if="${#fields.hasErrors('lastNameKana')}"
+                            th:errors="*{lastNameKana}">
 
                         </p>
 

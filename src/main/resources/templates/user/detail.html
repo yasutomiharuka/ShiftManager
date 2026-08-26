@@ -1,29 +1,92 @@
 <!DOCTYPE html>
+
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
     <title>ユーザー詳細</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
-    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
+
+    <!-- アプリケーション全体の共通スタイル -->
+    <link
+        rel="stylesheet"
+        th:href="@{/css/app.css}"
+        href="/css/app.css">
+
+    <!-- ユーザー管理画面用のスタイル -->
+    <link
+        rel="stylesheet"
+        th:href="@{/css/user.css}"
+        href="/css/user.css">
+
 </head>
+
 <body class="app-page">
+
+    <!-- 共通ヘッダー -->
     <header class="app-header">
-        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
-            <span class="brand__mark" aria-hidden="true">S</span>
+
+        <!-- ホーム画面へ移動するロゴ -->
+        <a
+            class="brand brand--dark"
+            th:href="@{/home}"
+            href="/home"
+            aria-label="ShiftManager ホーム">
+
+            <span
+                class="brand__mark"
+                aria-hidden="true">
+
+                S
+
+            </span>
+
             <span>ShiftManager</span>
+
         </a>
-        <a class="header-back-link" th:href="@{/user/list}">← ユーザー一覧へ戻る</a>
+
+        <!-- ユーザー一覧画面へ戻るリンク -->
+        <a
+            class="header-back-link"
+            th:href="@{/user/list}">
+
+            ← ユーザー一覧へ戻る
+
+        </a>
+
     </header>
+
     <main class="content-main content-main--form">
+
+        <!-- 画面タイトルと説明 -->
         <div class="page-heading">
+
             <div>
+
                 <p class="eyebrow">USER DETAIL</p>
+
                 <h1>ユーザー詳細</h1>
-                <p>登録内容と固定勤務スケジュールを確認できます。</p>
+
+                <p>
+                    登録内容と固定勤務スケジュールを確認できます。
+                </p>
+
             </div>
+
         </div>
-        <section class="panel detail-panel" th:with="
+
+        <!--
+            ユーザーロール、性別、雇用形態、所属のコード値を
+            messages.propertiesに定義された表示名へ変換する。
+        -->
+        <section
+            class="panel detail-panel"
+            th:with="
                 roleKey='role.' + ${user.role},
                 genderKey='gender.' + ${user.gender},
                 employmentTypeKey='employment_type.' + ${user.employmentType},
@@ -33,35 +96,305 @@
                 employmentTypeMsg=${#messages.msg(employmentTypeKey)},
                 departmentMsg=${#messages.msg(departmentKey)}
             ">
+
+            <!-- ユーザーの基本情報 -->
             <table class="detail-table">
+
                 <tbody>
-                    <tr><th scope="row">ユーザーID</th><td th:text="${user.id}"></td></tr>
-                    <tr><th scope="row">ユーザー名</th><td th:text="${user.username}"></td></tr>
-                    <tr><th scope="row">ユーザーロール</th><td th:text="${roleMsg}"></td></tr>
-                    <tr><th scope="row">姓名</th><td th:text="|${user.firstName} ${user.lastName}|"></td></tr>
-                    <tr><th scope="row">生年月日</th><td th:text="${user.birthDate}"></td></tr>
-                    <tr><th scope="row">性別</th><td th:text="${genderMsg}"></td></tr>
-                    <tr><th scope="row">雇用形態</th><td th:text="${employmentTypeMsg}"></td></tr>
-                    <tr><th scope="row">所属</th><td th:text="${departmentMsg}"></td></tr>
+
+                    <!-- ユーザーID -->
+                    <tr>
+
+                        <th scope="row">ユーザーID</th>
+
+                        <td th:text="${user.id}"></td>
+
+                    </tr>
+
+                    <!-- ログイン用ユーザー名 -->
+                    <tr>
+
+                        <th scope="row">ユーザー名</th>
+
+                        <td th:text="${user.username}"></td>
+
+                    </tr>
+
+                    <!-- 管理者・一般ユーザーなどの権限 -->
+                    <tr>
+
+                        <th scope="row">ユーザーロール</th>
+
+                        <td th:text="${roleMsg}"></td>
+
+                    </tr>
+
+                    <!-- 姓と名を連結して表示 -->
+                    <tr>
+
+                        <th scope="row">姓名</th>
+
+                        <td
+                            th:text="|${user.firstName} ${user.lastName}|">
+
+                        </td>
+
+                    </tr>
+
+                    <!--
+                        姓・名のフリガナ。
+
+                        既存ユーザーにフリガナが登録されていない場合は、
+                        「null null」と表示せず「未登録」と表示する。
+                    -->
+                    <tr>
+
+                        <th scope="row">姓名（フリガナ）</th>
+
+                        <td
+                            th:if="${
+                                user.firstNameKana != null
+                                or user.lastNameKana != null
+                            }"
+                            th:text="|${user.firstNameKana ?: ''} ${user.lastNameKana ?: ''}|">
+
+                        </td>
+
+                        <td
+                            th:unless="${
+                                user.firstNameKana != null
+                                or user.lastNameKana != null
+                            }">
+
+                            未登録
+
+                        </td>
+
+                    </tr>
+
+                    <!-- 生年月日 -->
+                    <tr>
+
+                        <th scope="row">生年月日</th>
+
+                        <td th:text="${user.birthDate}"></td>
+
+                    </tr>
+
+                    <!-- 性別 -->
+                    <tr>
+
+                        <th scope="row">性別</th>
+
+                        <td th:text="${genderMsg}"></td>
+
+                    </tr>
+
+                    <!-- 正社員・パートなどの雇用形態 -->
+                    <tr>
+
+                        <th scope="row">雇用形態</th>
+
+                        <td th:text="${employmentTypeMsg}"></td>
+
+                    </tr>
+
+                    <!-- 所属部署 -->
+                    <tr>
+
+                        <th scope="row">所属</th>
+
+                        <td th:text="${departmentMsg}"></td>
+
+                    </tr>
+
                 </tbody>
+
             </table>
-            <div class="schedule-summary" th:if="${user.employmentType == 'parttime'}">
+
+            <!--
+                パート勤務者のみ、曜日別の固定勤務スケジュールを表示する。
+
+                休日の場合は「休み」、
+                勤務日の場合は開始時刻と終了時刻を表示する。
+            -->
+            <div
+                class="schedule-summary"
+                th:if="${user.employmentType == 'parttime'}">
+
                 <h3>固定勤務スケジュール</h3>
-                    <p>月曜日<span th:text="${user.mondayOff} ? '休み' : ${user.mondayStartTime} + '〜' + ${user.mondayEndTime}"></span></p>
-                    <p>火曜日<span th:text="${user.tuesdayOff} ? '休み' : ${user.tuesdayStartTime} + '〜' + ${user.tuesdayEndTime}"></span></p>
-                    <p>水曜日<span th:text="${user.wednesdayOff} ? '休み' : ${user.wednesdayStartTime} + '〜' + ${user.wednesdayEndTime}"></span></p>
-                    <p>木曜日<span th:text="${user.thursdayOff} ? '休み' : ${user.thursdayStartTime} + '〜' + ${user.thursdayEndTime}"></span></p>
-                    <p>金曜日<span th:text="${user.fridayOff} ? '休み' : ${user.fridayStartTime} + '〜' + ${user.fridayEndTime}"></span></p>
-                    <p>土曜日<span th:text="${user.saturdayOff} ? '休み' : ${user.saturdayStartTime} + '〜' + ${user.saturdayEndTime}"></span></p>
-                    <p>日曜日<span th:text="${user.sundayOff} ? '休み' : ${user.sundayStartTime} + '〜' + ${user.sundayEndTime}"></span></p>
+
+                <!-- 月曜日 -->
+                <p>
+
+                    月曜日
+
+                    <span
+                        th:text="
+                            ${user.mondayOff}
+                                ? '休み'
+                                : ${user.mondayStartTime}
+                                    + '〜'
+                                    + ${user.mondayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
+                <!-- 火曜日 -->
+                <p>
+
+                    火曜日
+
+                    <span
+                        th:text="
+                            ${user.tuesdayOff}
+                                ? '休み'
+                                : ${user.tuesdayStartTime}
+                                    + '〜'
+                                    + ${user.tuesdayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
+                <!-- 水曜日 -->
+                <p>
+
+                    水曜日
+
+                    <span
+                        th:text="
+                            ${user.wednesdayOff}
+                                ? '休み'
+                                : ${user.wednesdayStartTime}
+                                    + '〜'
+                                    + ${user.wednesdayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
+                <!-- 木曜日 -->
+                <p>
+
+                    木曜日
+
+                    <span
+                        th:text="
+                            ${user.thursdayOff}
+                                ? '休み'
+                                : ${user.thursdayStartTime}
+                                    + '〜'
+                                    + ${user.thursdayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
+                <!-- 金曜日 -->
+                <p>
+
+                    金曜日
+
+                    <span
+                        th:text="
+                            ${user.fridayOff}
+                                ? '休み'
+                                : ${user.fridayStartTime}
+                                    + '〜'
+                                    + ${user.fridayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
+                <!-- 土曜日 -->
+                <p>
+
+                    土曜日
+
+                    <span
+                        th:text="
+                            ${user.saturdayOff}
+                                ? '休み'
+                                : ${user.saturdayStartTime}
+                                    + '〜'
+                                    + ${user.saturdayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
+                <!-- 日曜日 -->
+                <p>
+
+                    日曜日
+
+                    <span
+                        th:text="
+                            ${user.sundayOff}
+                                ? '休み'
+                                : ${user.sundayStartTime}
+                                    + '〜'
+                                    + ${user.sundayEndTime}
+                        ">
+
+                    </span>
+
+                </p>
+
             </div>
+
+            <!-- 一覧・削除確認・編集画面への操作ボタン -->
             <div class="detail-actions">
-                <a class="button button--secondary" th:href="@{/user/list}">一覧へ戻る</a>
-                <a class="button button--danger" th:href="@{/user/delete/confirm/{id}(id=${user.id})}">削除する</a>
-                <a class="button button--primary" th:href="@{/user/edit/{id}(id=${user.id})}">編集する</a>
+
+                <!-- ユーザー一覧へ戻る -->
+                <a
+                    class="button button--secondary"
+                    th:href="@{/user/list}">
+
+                    一覧へ戻る
+
+                </a>
+
+                <!-- 削除確認画面へ移動 -->
+                <a
+                    class="button button--danger"
+                    th:href="@{/user/delete/confirm/{id}(id=${user.id})}">
+
+                    削除する
+
+                </a>
+
+                <!-- 編集画面へ移動 -->
+                <a
+                    class="button button--primary"
+                    th:href="@{/user/edit/{id}(id=${user.id})}">
+
+                    編集する
+
+                </a>
+
             </div>
+
         </section>
+
     </main>
-    <footer class="app-footer">© ShiftManager</footer>
+
+    <!-- 共通フッター -->
+    <footer class="app-footer">
+
+        © ShiftManager
+
+    </footer>
+
 </body>
+
 </html>

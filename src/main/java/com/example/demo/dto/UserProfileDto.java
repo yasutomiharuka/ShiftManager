@@ -121,6 +121,32 @@ public class UserProfileDto {
     )
     private String lastName;
 
+    // 姓のフリガナ
+    // 登録・編集の両方で必須とし、全角カタカナと長音のみ許可する。
+    @NotBlank(message = "姓（フリガナ）は必須です。")
+    @Size(
+            max = 50,
+            message = "姓（フリガナ）は50文字以内で入力してください。"
+    )
+    @Pattern(
+            regexp = "^[ァ-ヶー]+$",
+            message = "姓（フリガナ）は全角カタカナで入力してください。"
+    )
+    private String firstNameKana;
+
+    // 名のフリガナ
+    // 登録・編集の両方で必須とし、全角カタカナと長音のみ許可する。
+    @NotBlank(message = "名（フリガナ）は必須です。")
+    @Size(
+            max = 50,
+            message = "名（フリガナ）は50文字以内で入力してください。"
+    )
+    @Pattern(
+            regexp = "^[ァ-ヶー]+$",
+            message = "名（フリガナ）は全角カタカナで入力してください。"
+    )
+    private String lastNameKana;
+
     // 生年月日
     // 画面から送信される yyyy-MM-dd 形式の日付を LocalDate に変換する。
     @NotNull(message = "生年月日は必須です。")
@@ -240,6 +266,8 @@ public class UserProfileDto {
      * @param role ユーザーロール
      * @param firstName 姓
      * @param lastName 名
+     * @param firstNameKana 姓のフリガナ
+     * @param lastNameKana 名のフリガナ
      * @param birthDate 生年月日
      * @param gender 性別
      * @param employmentType 雇用形態
@@ -275,6 +303,8 @@ public class UserProfileDto {
             String role,
             String firstName,
             String lastName,
+            String firstNameKana,
+            String lastNameKana,
 
             LocalDate birthDate,
 
@@ -319,6 +349,8 @@ public class UserProfileDto {
         this.role = role;
         this.firstName = firstName;
         this.lastName = lastName;
+        this.firstNameKana = firstNameKana;
+        this.lastNameKana = lastNameKana;
         this.birthDate = birthDate;
         this.gender = gender;
         this.employmentType = employmentType;
@@ -406,6 +438,22 @@ public class UserProfileDto {
 
     public void setLastName(String lastName) {
         this.lastName = lastName;
+    }
+
+    public String getFirstNameKana() {
+        return firstNameKana;
+    }
+
+    public void setFirstNameKana(String firstNameKana) {
+        this.firstNameKana = firstNameKana;
+    }
+
+    public String getLastNameKana() {
+        return lastNameKana;
+    }
+
+    public void setLastNameKana(String lastNameKana) {
+        this.lastNameKana = lastNameKana;
     }
 
     public LocalDate getBirthDate() {
