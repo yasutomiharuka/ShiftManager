@@ -57,6 +57,14 @@ public class UserProfile {
 
     @Column(name = "department", length = 50)
     private String department;
+
+    /**
+     * ユーザーの有効状態。
+     * true: 有効、false: 無効（過去のシフト情報は保持する）
+     */
+    @Column(name = "active", nullable = false)
+    @ColumnDefault("true")
+    private Boolean active = true;
     
     // 各曜日の「休み」フラグ（デフォルト：false）
     @Column(name = "monday_off")
@@ -166,6 +174,9 @@ public class UserProfile {
         if (this.employmentType == null) {
             this.employmentType = "未設定";
         }
+        if (this.active == null) {
+            this.active = true;
+        }
     }
 
     // Getter / Setter
@@ -264,6 +275,14 @@ public class UserProfile {
  
     public void setDepartment(String department) {
         this.department = department;
+    }
+
+    public Boolean getActive() {
+        return active;
+    }
+
+    public void setActive(Boolean active) {
+        this.active = active;
     }
     
     public Boolean getMondayOff() {
@@ -439,6 +458,7 @@ public class UserProfile {
                ", gender='" + gender + '\'' +
                ", employmentType='" + employmentType + '\'' +
                ", department='" + department + '\'' +
+               ", active=" + active +
                ", mondayOff=" + mondayOff +
                ", tuesdayOff=" + tuesdayOff +
                ", wednesdayOff=" + wednesdayOff +

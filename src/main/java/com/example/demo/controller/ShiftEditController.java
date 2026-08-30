@@ -1,7 +1,12 @@
 package com.example.demo.controller;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,6 +22,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import com.example.demo.form.ShiftGenerationForm;
 import com.example.demo.model.Shift;
+import com.example.demo.model.UserProfile;
+import com.example.demo.repository.ShiftRepository;
+import com.example.demo.repository.UserProfileRepository;
 import com.example.demo.service.ShiftService;
 
 /**
@@ -82,15 +90,27 @@ public class ShiftEditController {
     // シフトの保存・確定解除を担当するService。
     private final ShiftService shiftService;
 
+    // 保存直前に、有効職員と所属部署をDBから確認する。
+    private final UserProfileRepository userProfileRepository;
+
+    // 現行Serviceの一括確定解除が無効職員の履歴を変更しないか事前確認する。
+    private final ShiftRepository shiftRepository;
+
     /**
      * コンストラクタでShiftServiceを注入する。
      *
      * @param shiftService シフト保存・確定解除を担当するService
+     * @param userProfileRepository 有効職員の取得用Repository
+     * @param shiftRepository 確定解除対象の事前確認用Repository
      */
     public ShiftEditController(
-            ShiftService shiftService
+            ShiftService shiftService,
+            UserProfileRepository userProfileRepository,
+            ShiftRepository shiftRepository
     ) {
         this.shiftService = shiftService;
+        this.userProfileRepository = userProfileRepository;
+        this.shiftRepository = shiftRepository;
     }
 
     /**
@@ -423,6 +443,18 @@ public class ShiftEditController {
         // =========================================================
 
         try {
+            // 更新・新規登録・空欄による削除の前に、送信された全セルを検証する。
+            // 不正なセルを黙って除外して部分保存せず、1件でも対象外なら全体を止める。
+            String targetError = validateShiftTargets(form, normalizedAction);
+            if (targetError != null) {
+                logger.warn(
+                        "Shift operation rejected by target validation: department={}, targetMonth={}, action={}",
+                        form.getDepartment(), form.getTargetMonth(), normalizedAction);
+                preserveSubmittedShifts(form, ra);
+                ra.addFlashAttribute("errorMessage", targetError);
+                return redirectToGenerate(form, ra);
+            }
+
             // 正常終了時に画面上部へ表示する通知メッセージ。
             String notice;
 
@@ -461,8 +493,10 @@ public class ShiftEditController {
 
                 // ▼ 確定解除（CONFIRMED → DRAFT）
                 //
-                // 対象月・部署のCONFIRMEDをDRAFTに戻す処理は、
+                // 事前検証で対象外職員の確定シフトがないことを確認してから、
+                // 対象月・部署のCONFIRMEDをDRAFTに戻す処理を
                 // ShiftService#unconfirmShiftsへ委譲する。
+                // 無効職員と有効職員が混在する場合の個別解除は、Service側の改修が必要。
                 //
                 // 基本的には「確定後に修正したくなったとき」に使用する。
                 shiftService.unconfirmShifts(
@@ -657,6 +691,93 @@ public class ShiftEditController {
     }
 
     /**
+     * 操作対象を検証する。問題がなければnull、問題があれば画面用メッセージを返す。
+     *
+     * このチェックはController入口の防御。
+     * 他の呼び出し元や検証後の無効化との競合にも対応するには、
+     * Serviceの更新トランザクション内でも有効状態・所属を検証する必要がある。
+     */
+    private String validateShiftTargets(ShiftGenerationForm form, String action) {
+
+        // 未定義の操作は既存switchのdefaultで拒否する。
+        if (!"DRAFT".equals(action)
+                && !"CONFIRMED".equals(action)
+                && !"UNCONFIRM".equals(action)) {
+            return null;
+        }
+
+        Set<Long> activeUserIds = new HashSet<>();
+        for (UserProfile user : userProfileRepository
+                .findByDepartmentAndActiveTrue(form.getDepartment())) {
+            activeUserIds.add(user.getId());
+        }
+
+        if ("UNCONFIRM".equals(action)) {
+            // 現行Serviceはform.shiftsを見ず、部署・月の全確定行を更新する。
+            // 送信キーだけの検証では無効職員を保護できないため、実際の更新範囲を調べる。
+            List<Shift> confirmedShifts =
+                    shiftRepository.findByDepartmentAndDateBetweenAndStatus(
+                            form.getDepartment(),
+                            form.getTargetMonth().atDay(1),
+                            form.getTargetMonth().atEndOfMonth(),
+                            Shift.Status.CONFIRMED);
+
+            for (Shift shift : confirmedShifts) {
+                if (shift.getUser() == null
+                        || !activeUserIds.contains(shift.getUser().getId())) {
+                    return "対象月に無効化された職員、または所属が変更された職員の"
+                            + "確定シフトがあるため、一括で確定解除できません。"
+                            + "履歴を保護するため、処理を中止しました。"
+                            + "有効職員分だけの確定解除には、保存Serviceの対応が必要です。";
+                }
+            }
+            return null;
+        }
+
+        // 空の送信は既存Serviceと同様に更新対象なしとして扱う。
+        if (form.getShifts() == null || form.getShifts().isEmpty()) {
+            return null;
+        }
+
+        for (String key : form.getShifts().keySet()) {
+            if (key == null) {
+                return "シフトの指定形式が正しくありません。画面を再表示してください。";
+            }
+
+            int separator = key.indexOf('_');
+            if (separator <= 0) {
+                return "シフトの指定形式が正しくありません。画面を再表示してください。";
+            }
+
+            Long userId;
+            LocalDate date;
+            try {
+                userId = Long.valueOf(key.substring(0, separator));
+                date = LocalDate.parse(key.substring(separator + 1));
+            } catch (NumberFormatException | DateTimeParseException e) {
+                return "シフトのユーザーIDまたは日付が正しくありません。"
+                        + "画面を再表示してください。";
+            }
+
+            // IDの別表記や対象月外の日付も受け付けず、保存先を画面の範囲に限定する。
+            if (!key.equals(userId + "_" + date)
+                    || !form.getTargetMonth().equals(java.time.YearMonth.from(date))) {
+                return "対象月以外、または形式が不正なシフトが含まれています。"
+                        + "画面を再表示して、対象年月を確認してください。";
+            }
+
+            // 値が空欄や「-」の削除操作でも必ず検証する。
+            if (!activeUserIds.contains(userId)) {
+                return "無効化された職員、存在しない職員、または別部署の職員が"
+                        + "入力内容に含まれています。保存は行っていません。"
+                        + "画面を再表示して、対象職員を確認してください。";
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * 保存失敗時の入力済みシフトを保持する。
      *
      * 【保持する値】
@@ -676,7 +797,7 @@ public class ShiftEditController {
      * 2. 変更済みセルをsubmittedShiftsとして保存する。
      * 3. /shift/generateへリダイレクトする。
      * 4. ShiftGenerationControllerがDB上のshiftMapへ
-     *    submittedShiftsを重ねて画面へ渡す。
+     *    有効職員・対象月に一致するsubmittedShiftsだけを重ねて画面へ渡す。
      * 5. 保存されなかった入力内容が画面上に再表示される。
      *
      * 【注意】

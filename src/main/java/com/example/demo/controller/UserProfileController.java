@@ -44,7 +44,8 @@ import com.example.demo.service.UserProfileService;
  *   指定したユーザー情報を更新する。
  *
  * ・DELETE /api/user/{id}
- *   指定したユーザー情報を削除する。
+ *   指定したユーザーを無効化する。
+ *   ユーザー情報と過去のシフト履歴は削除しない。
  *
  * 【入力チェックの方針】
  * ・新規登録時は共通項目に加え、パスワードを必須とする。
@@ -73,7 +74,7 @@ public class UserProfileController {
                     UserProfileController.class
             );
 
-    // ユーザー情報の取得・登録・更新・削除を担当するService。
+    // ユーザー情報の取得・登録・更新・無効化を担当するService。
     private final UserProfileService userProfileService;
 
     /**
@@ -95,7 +96,7 @@ public class UserProfileController {
      *
      * 【正常時】
      * ・HTTP 200 OK
-     * ・登録済みユーザーのDTO一覧を返す。
+     * ・active=trueの有効なユーザーのDTO一覧を返す。
      *
      * @return ユーザー情報のリスト
      */
@@ -106,7 +107,7 @@ public class UserProfileController {
                 "Fetching all user profiles."
         );
 
-        // Serviceを通じて登録済みユーザー一覧を取得する。
+        // Serviceを通じて、有効なユーザーだけを取得する。
         List<UserProfileDto> users =
                 userProfileService.getAllUserProfiles();
 
@@ -507,21 +508,23 @@ public class UserProfileController {
     }
 
     /**
-     * ユーザー情報を削除する。
+     * ユーザーを無効化する。
      *
      * 【API】
      * DELETE /api/user/{id}
      *
      * 【正常時】
-     * ・HTTP 204 No Content
+     * ・activeをfalseに更新し、HTTP 204 No Contentを返す。
+     * ・すでに無効なユーザーへ再度実行した場合も成功扱いとする。
+     * ・ユーザー情報、過去のシフト、希望休などの関連データは保持する。
      *
      * 【異常時】
      * ・対象ユーザー不存在     : HTTP 404 Not Found
-     * ・関連データによる制約違反 : HTTP 409 Conflict
-     * ・その他の削除エラー     : HTTP 500 Internal Server Error
+     * ・無効化時のDB制約違反 : HTTP 409 Conflict
+     * ・その他の無効化エラー : HTTP 500 Internal Server Error
      *
      * @param id ユーザーID
-     * @return 削除結果のレスポンス
+     * @return 無効化結果のレスポンス
      */
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteUserProfile(
@@ -529,23 +532,24 @@ public class UserProfileController {
     ) {
 
         logger.debug(
-                "Deleting user profile for ID: {}",
+                "Disabling user profile for ID: {}",
                 id
         );
 
         try {
 
-            // Serviceを通じて対象ユーザーを削除する。
-            boolean isDeleted =
+            // 物理削除は行わず、Serviceでactive=falseに更新する。
+            // これにより、過去のシフトなどの関連データを保持する。
+            boolean isDisabled =
                     userProfileService.deleteUserProfile(
                             id
                     );
 
             // 対象ユーザーが存在しなかった場合。
-            if (!isDeleted) {
+            if (!isDisabled) {
 
                 logger.warn(
-                        "User profile not found for deletion: userId={}",
+                        "User profile not found for disabling: userId={}",
                         id
                 );
 
@@ -562,21 +566,21 @@ public class UserProfileController {
             }
 
             logger.info(
-                    "User profile deleted successfully: userId={}",
+                    "User profile disabled successfully: userId={}",
                     id
             );
 
-            // 削除成功時は本文なしのHTTP 204を返す。
+            // 無効化成功時は本文なしのHTTP 204を返す。
             return ResponseEntity
                     .noContent()
                     .build();
 
         } catch (DataIntegrityViolationException e) {
 
-            // 対象ユーザーに関連シフトなどが存在し、
-            // DBの参照整合性制約により削除できない場合。
+            // activeの更新時にDB制約違反が発生した場合。
+            // 物理削除を行わないため、関連シフトの外部キーは通常影響しない。
             logger.error(
-                    "Database constraint violation during user deletion: userId={}",
+                    "Database constraint violation while disabling user: userId={}",
                     id,
                     e
             );
@@ -587,17 +591,17 @@ public class UserProfileController {
                     )
                     .body(
                             createErrorResponse(
-                                    "ERR_USER_DELETE_FAILED",
-                                    "関連するデータが存在するため、"
-                                            + "ユーザーを削除できませんでした。"
+                                    "ERR_USER_DISABLE_FAILED",
+                                    "ユーザーを無効化できませんでした。"
+                                            + "データの状態をご確認ください。"
                             )
                     );
 
         } catch (Exception e) {
 
-            // その他の想定外の削除エラー。
+            // その他の想定外の無効化エラー。
             logger.error(
-                    "Unexpected error during user deletion: userId={}",
+                    "Unexpected error while disabling user: userId={}",
                     id,
                     e
             );
@@ -608,8 +612,8 @@ public class UserProfileController {
                     )
                     .body(
                             createErrorResponse(
-                                    "ERR_USER_DELETE_FAILED",
-                                    "ユーザーの削除に失敗しました。"
+                                    "ERR_USER_DISABLE_FAILED",
+                                    "ユーザーの無効化に失敗しました。"
                                             + "時間をおいて再度お試しください。"
                             )
                     );
@@ -654,7 +658,7 @@ public class UserProfileController {
     }
 
     /**
-     * APIの保存・更新・削除エラー応答を作成する。
+     * APIの保存・更新・無効化エラー応答を作成する。
      *
      * 【返却例】
      *

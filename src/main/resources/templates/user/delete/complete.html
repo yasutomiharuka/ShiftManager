@@ -1,32 +1,138 @@
 <!DOCTYPE html>
+
 <html lang="ja" xmlns:th="http://www.thymeleaf.org">
+
 <head>
+
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ユーザー削除完了</title>
-    <link rel="stylesheet" th:href="@{/css/app.css}" href="/css/app.css">
-    <link rel="stylesheet" th:href="@{/css/user.css}" href="/css/user.css">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+    <title>ユーザー無効化完了 | ShiftManager</title>
+
+    <!-- 共通デザインとユーザー管理画面のスタイルシート -->
+    <link
+        rel="stylesheet"
+        th:href="@{/css/app.css}"
+        href="/css/app.css">
+
+    <link
+        rel="stylesheet"
+        th:href="@{/css/user.css}"
+        href="/css/user.css">
+
 </head>
+
 <body class="app-page">
+
+    <!-- 共通ヘッダー -->
     <header class="app-header">
-        <a class="brand brand--dark" th:href="@{/home}" href="/home" aria-label="ShiftManager ホーム">
-            <span class="brand__mark" aria-hidden="true">S</span>
+
+        <a
+            class="brand brand--dark"
+            th:href="@{/home}"
+            href="/home"
+            aria-label="ShiftManager ホーム">
+
+            <span
+                class="brand__mark"
+                aria-hidden="true">
+
+                S
+
+            </span>
+
             <span>ShiftManager</span>
+
         </a>
-        <a class="header-back-link" th:href="@{/user/list}">← ユーザー一覧へ戻る</a>
+
+        <a
+            class="header-back-link"
+            th:href="@{/user/list}"
+            href="/user/list">
+
+            ← ユーザー一覧へ戻る
+
+        </a>
+
     </header>
+
     <main class="content-main content-main--form">
-        <section class="completion-card" aria-labelledby="completion-title">
-            <span class="completion-card__icon" aria-hidden="true">✓</span>
-            <p class="eyebrow">COMPLETED</p>
-            <h1 id="completion-title">ユーザー削除完了</h1>
-            <p>ユーザーの削除が完了しました。</p>
+
+        <!-- ユーザー無効化の完了内容を表示する -->
+        <section
+            class="completion-card"
+            aria-labelledby="completion-title">
+
+            <span
+                class="completion-card__icon"
+                aria-hidden="true">
+
+                ✓
+
+            </span>
+
+            <p class="eyebrow">
+                COMPLETED
+            </p>
+
+            <h1 id="completion-title">
+                ユーザー無効化完了
+            </h1>
+
+            <p>
+                ユーザーを無効化しました。
+                無効化されたユーザーはログインできなくなり、
+                通常のユーザー一覧・シフト入力・
+                シフト自動生成の対象から除外されます。
+            </p>
+
+            <p>
+                ユーザー情報と過去のシフト履歴は削除されていません。
+                無効化されたユーザーは、ユーザー履歴画面から確認できます。
+            </p>
+
             <div class="detail-actions">
-                <a class="button button--secondary" th:href="@{/home}">ホームへ</a>
-                <a class="button button--primary" th:href="@{/user/list}">ユーザー一覧へ</a>
+
+                <a
+                    class="button button--secondary"
+                    th:href="@{/home}"
+                    href="/home">
+
+                    ホームへ
+
+                </a>
+
+                <a
+                    class="button button--secondary"
+                    th:href="@{/user/list}"
+                    href="/user/list">
+
+                    ユーザー一覧へ
+
+                </a>
+
+                <a
+                    class="button button--primary"
+                    th:href="@{/user/history}"
+                    href="/user/history">
+
+                    ユーザー履歴を確認
+
+                </a>
+
             </div>
+
         </section>
+
     </main>
-    <footer class="app-footer">© ShiftManager</footer>
+
+    <footer class="app-footer">
+        © ShiftManager
+    </footer>
+
 </body>
+
 </html>

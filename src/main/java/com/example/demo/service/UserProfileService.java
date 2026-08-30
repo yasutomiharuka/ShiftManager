@@ -144,42 +144,75 @@ public class UserProfileService {
     }
 
     /**
-     * ユーザー情報を削除する。
+     * ユーザーを無効化する。
+     *
+     * レコードは削除せず、activeをfalseにすることで、
+     * 過去のシフトからユーザー情報を参照できる状態を維持する。
      *
      * @param id ユーザーID
-     * @return 削除成功時はtrue、対象不存在時はfalse
+     * @return 無効化成功時はtrue、対象不存在または無効化済みの場合はfalse
      */
     public boolean deleteUserProfile(Long id) {
 
-        if (userProfileRepository.existsById(id)) {
+        Optional<UserProfile> optionalUser =
+                userProfileRepository.findById(id);
 
-            userProfileRepository.deleteById(id);
-
-            logger.info(
-                    "User profile deleted: ID {}",
+        if (optionalUser.isEmpty()) {
+            logger.warn(
+                    "User profile not found for disabling: ID {}",
                     id
             );
 
-            return true;
+            return false;
         }
 
-        logger.warn(
-                "User profile not found for deletion: ID {}",
+        UserProfile userProfile = optionalUser.get();
+
+        if (!Boolean.TRUE.equals(userProfile.getActive())) {
+            logger.warn(
+                    "User profile is already disabled: ID {}",
+                    id
+            );
+
+            return false;
+        }
+
+        userProfile.setActive(false);
+        userProfileRepository.save(userProfile);
+
+        logger.info(
+                "User profile disabled: ID {}",
                 id
         );
 
-        return false;
+        return true;
     }
 
     /**
-     * ユーザー一覧を取得する。
+     * 有効なユーザー一覧を取得する。
      *
      * @return ユーザー情報のDTO一覧
      */
     public List<UserProfileDto> getAllUserProfiles() {
 
         return userProfileRepository
-                .findAll()
+                .findAllByActiveTrue()
+                .stream()
+                .map(this::convertToDto)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 無効化されたユーザー一覧を取得する。
+     *
+     * ユーザー管理画面の「履歴」タブで使用する。
+     *
+     * @return 無効化されたユーザー情報のDTO一覧
+     */
+    public List<UserProfileDto> getInactiveUserProfiles() {
+
+        return userProfileRepository
+                .findAllByActiveFalse()
                 .stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());
@@ -314,6 +347,9 @@ public class UserProfileService {
                 dto.getEmploymentType(),
                 dto.getDepartment()
         );
+
+        // 新規登録したユーザーは有効な状態にする。
+        entity.setActive(true);
 
         // 曜日別の固定休。
         entity.setMondayOff(dto.getMondayOff());

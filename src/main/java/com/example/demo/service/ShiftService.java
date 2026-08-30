@@ -2,8 +2,8 @@ package com.example.demo.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth; // ★ 追加：対象月の範囲計算用
-import java.time.format.DateTimeFormatter;
+import java.time.YearMonth;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -21,6 +21,7 @@ import com.example.demo.dto.UserProfileDto;
 import com.example.demo.form.ShiftGenerationForm;
 import com.example.demo.model.Shift;
 import com.example.demo.model.Shift.Status;
+import com.example.demo.model.UserProfile;
 import com.example.demo.repository.ShiftRepository;
 import com.example.demo.repository.UserProfileRepository;
 
@@ -258,119 +259,105 @@ public class ShiftService {
 	 */
 	@Transactional
 	public void saveShifts(ShiftGenerationForm form, Status status) {
-
-		// --- デバッグログ（null 安全） ---
-		System.out.println("DEBUG saveShifts: status=" + status
-				+ ", dept=" + (form != null ? form.getDepartment() : null)
-				+ ", shifts=" + (form != null ? form.getShifts() : null));
-
-		// フォーム or shifts が null / 空なら何もしないで終了
 		if (form == null || form.getShifts() == null || form.getShifts().isEmpty()) {
 			return;
 		}
-
-		// 部署は必須
 		if (!StringUtils.hasText(form.getDepartment())) {
-			throw new IllegalArgumentException(
-					"Department must not be null or empty when saving shifts");
+			throw new IllegalArgumentException("Department must not be null or empty when saving shifts");
+		}
+		if (form.getTargetMonth() == null) {
+			throw new IllegalArgumentException("TargetMonth must not be null when saving shifts");
+		}
+		if (status != Status.DRAFT && status != Status.CONFIRMED) {
+			throw new IllegalArgumentException("Status must be DRAFT or CONFIRMED when saving shifts");
 		}
 
-		final String department = form.getDepartment().trim();
-		final DateTimeFormatter DF = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+		String department = form.getDepartment().trim();
+		YearMonth targetMonth = form.getTargetMonth();
+		List<ValidatedShiftCell> cells = new ArrayList<>();
 
-		// --- 1セルずつ処理 ---
+		// 1件でも不正なセルがあれば、DBを更新する前に処理全体を中止する。
 		for (Map.Entry<String, String> entry : form.getShifts().entrySet()) {
+			ValidatedShiftCell cell = validateShiftCell(entry, department, targetMonth);
+			cells.add(cell);
+		}
 
-			String key = entry.getKey(); // 例: "6_2025-11-01"
-			String value = entry.getValue() == null ? "" : entry.getValue().trim();
-
-			// ===== キーを userId と LocalDate に分解 =====
-			// ※ "userId_日付" という形式でないものはスキップ
-			int underscore = key.indexOf('_');
-			if (underscore <= 0) {
-				// 不正フォーマットなのでこのセルは無視
+		// 全セルの検証に成功してから、削除・登録・更新を開始する。
+		for (ValidatedShiftCell cell : cells) {
+			if (cell.value().isEmpty() || "-".equals(cell.value())) {
+				shiftRepository.deleteByUser_IdAndDateAndDepartment(
+						cell.user().getId(), cell.date(), department);
 				continue;
 			}
 
-			Long userId;
-			LocalDate date;
-			try {
-				userId = Long.valueOf(key.substring(0, underscore));
-				date = LocalDate.parse(key.substring(underscore + 1), DF);
-			} catch (Exception e) {
-				// パースに失敗した場合もそのセルだけスキップ
-				continue;
-			}
-
-			// ===== クリア処理 =====
-			// value が 空 or "-" は「シフトなし」と解釈し、既存レコードを削除
-			if (value.isEmpty() || "-".equals(value)) {
-
-				// デバッグログ：削除対象のキー情報
-				System.out.println("DEBUG saveShifts: delete userId=" + userId
-						+ ", date=" + date
-						+ ", dept=" + department);
-
-				// 戻り値（削除件数）は利用しないので受け取らない
-				shiftRepository.deleteByUser_IdAndDateAndDepartment(userId, date, department);
-				continue;
-			}
-
-			// ===== Upsert 処理 =====
-			// 既存レコードがあれば取得、なければ new Shift()
 			Shift shift = shiftRepository
-					.findByUser_IdAndDateAndDepartment(userId, date, department)
+					.findByUser_IdAndDateAndDepartment(
+							cell.user().getId(), cell.date(), department)
 					.orElseGet(Shift::new);
 
-			// 新規（id == null）の場合は主キーとなる情報をセット
 			if (shift.getId() == null) {
-				// userProfiles テーブルからユーザーを取得（なければこのセルはスキップ）
-				var user = userProfileRepository.findById(userId).orElse(null);
-				if (user == null) {
-					// 想定外だが、念のため NPE 回避のためスキップ
-					System.out.println("DEBUG saveShifts: user not found. skip. userId=" + userId);
-					continue;
-				}
-				shift.setUser(user);
-				shift.setDate(date);
+				shift.setUser(cell.user());
+				shift.setDate(cell.date());
 				shift.setDepartment(department);
-
-				// デバッグログ：新規作成
-				System.out.println("DEBUG saveShifts: create new entity userId=" + userId
-						+ ", date=" + date
-						+ ", dept=" + department);
-			} else {
-				// デバッグログ：既存レコード更新
-				System.out.println("DEBUG saveShifts: update existing entity id=" + shift.getId()
-						+ ", userId=" + userId
-						+ ", date=" + date
-						+ ", dept=" + department);
 			}
 
-			// 画面のセル値をそのまま shiftType に保存
-			// （"日","夜","明","休","有","臨(確)","臨(自)" など）
-			shift.setShiftType(value);
-
-			// 一時保存 or 確定のステータスをセット
+			shift.setShiftType(cell.value());
 			shift.setStatus(status);
-
-			// デバッグログ：保存直前の状態確認
-			System.out.println("DEBUG saveShifts: before save entity id=" + shift.getId()
-					+ ", userId=" + userId
-					+ ", date=" + date
-					+ ", dept=" + department
-					+ ", type=" + value
-					+ ", status=" + status);
-
-			// 新規なら INSERT、既存なら UPDATE が発行される
 			shiftRepository.save(shift);
 		}
+	}
 
-		// ループの一番最後あたり（for の外）に追加
-		System.out.println("DEBUG saveShifts: completed. total=" + form.getShifts().size());
+	/**
+	 * 保存対象の1セルを検証する。
+	 * 無効職員・存在しない職員・別部署・対象月外は保存も削除も許可しない。
+	 */
+	private ValidatedShiftCell validateShiftCell(
+			Map.Entry<String, String> entry,
+			String department,
+			YearMonth targetMonth) {
 
-		// ※ すぐに SQL を発行させたい場合はここで flush も可能（任意）
-		// shiftRepository.flush();
+		String key = entry.getKey();
+		if (!StringUtils.hasText(key)) {
+			throw new IllegalArgumentException("Shift key must not be empty");
+		}
+
+		int separator = key.indexOf('_');
+		if (separator <= 0 || separator != key.lastIndexOf('_')) {
+			throw new IllegalArgumentException("Invalid shift key: " + key);
+		}
+
+		Long userId;
+		LocalDate date;
+		try {
+			userId = Long.valueOf(key.substring(0, separator));
+			date = LocalDate.parse(key.substring(separator + 1));
+		} catch (RuntimeException e) {
+			throw new IllegalArgumentException("Invalid shift key: " + key, e);
+		}
+
+		if (!key.equals(userId + "_" + date)) {
+			throw new IllegalArgumentException("Non-canonical shift key: " + key);
+		}
+		if (!targetMonth.equals(YearMonth.from(date))) {
+			throw new IllegalArgumentException("Shift date is outside target month: " + key);
+		}
+
+		UserProfile user = userProfileRepository.findById(userId)
+				.orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
+
+		if (!Boolean.TRUE.equals(user.getActive())) {
+			throw new IllegalArgumentException("Inactive user cannot be edited: " + userId);
+		}
+		if (!department.equalsIgnoreCase(user.getDepartment())) {
+			throw new IllegalArgumentException("User does not belong to department: " + userId);
+		}
+
+		String value = entry.getValue() == null ? "" : entry.getValue().trim();
+		return new ValidatedShiftCell(user, date, value);
+	}
+
+	/** 検証済みセル。検証後の値だけを更新処理へ渡す。 */
+	private record ValidatedShiftCell(UserProfile user, LocalDate date, String value) {
 	}
 
 	/**
@@ -417,8 +404,14 @@ public class ShiftService {
 				+ ", month=" + targetMonth
 				+ ", confirmedCount=" + confirmedList.size());
 
-		// CONFIRMED → DRAFT に変更して保存
+		// 有効職員だけをCONFIRMED → DRAFTへ変更する。
+		// 無効職員の確定状態は過去シフト履歴として保持する。
 		for (Shift shift : confirmedList) {
+			if (shift.getUser() == null
+					|| !Boolean.TRUE.equals(shift.getUser().getActive())
+					|| !department.equalsIgnoreCase(shift.getUser().getDepartment())) {
+				continue;
+			}
 			shift.setStatus(Status.DRAFT);
 			shiftRepository.save(shift);
 		}

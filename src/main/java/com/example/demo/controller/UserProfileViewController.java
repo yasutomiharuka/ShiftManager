@@ -25,6 +25,7 @@ import com.example.demo.service.UserProfileService;
  *
  * 【対象画面】
  * ・ユーザー一覧画面
+ * ・無効化ユーザー履歴画面
  * ・ユーザー詳細画面
  * ・ユーザー編集画面
  * ・ユーザー編集確認画面
@@ -86,7 +87,7 @@ public class UserProfileViewController {
      * GET /user/list
      *
      * 【処理内容】
-     * ・登録済みユーザー一覧を取得する。
+     * ・有効なユーザー一覧を取得する。
      * ・Thymeleafテンプレートへusersとして渡す。
      *
      * @param model Thymeleafに渡すデータを保持するModelオブジェクト
@@ -99,7 +100,7 @@ public class UserProfileViewController {
                 "Displaying user list page."
         );
 
-        // Serviceを通じて登録済みユーザー一覧を取得する。
+        // Serviceを通じて有効なユーザー一覧を取得する。
         List<UserProfileDto> users =
                 userProfileService.getAllUserProfiles();
 
@@ -116,6 +117,45 @@ public class UserProfileViewController {
 
         // ユーザー一覧画面を表示する。
         return "user/list";
+    }
+
+    /**
+     * 無効化されたユーザーの履歴画面を表示する。
+     *
+     * 【URL】
+     * GET /user/history
+     *
+     * 【処理内容】
+     * ・activeがfalseのユーザー一覧を取得する。
+     * ・過去のシフトを保持したまま無効化されたユーザーを表示する。
+     * ・Thymeleafテンプレートへusersとして渡す。
+     *
+     * @param model Thymeleafに渡すデータを保持するModelオブジェクト
+     * @return 無効化ユーザー履歴画面のテンプレート名
+     */
+    @GetMapping("/history")
+    public String showUserHistory(Model model) {
+
+        logger.debug(
+                "Displaying inactive user history page."
+        );
+
+        // Serviceを通じて無効化されたユーザー一覧を取得する。
+        List<UserProfileDto> users =
+                userProfileService.getInactiveUserProfiles();
+
+        // history.htmlの一覧表示で使用するデータをModelへ設定する。
+        model.addAttribute(
+                "users",
+                users
+        );
+
+        logger.debug(
+                "Inactive user history loaded: count={}",
+                users.size()
+        );
+
+        return "user/history";
     }
 
     /**
@@ -544,19 +584,19 @@ public class UserProfileViewController {
     }
 
     /**
-     * 削除確認画面の表示。
+     * ユーザー無効化確認画面の表示。
      *
      * 【URL】
      * GET /user/delete/confirm/{id}
      *
      * 【処理内容】
      * ・指定IDのユーザー情報を取得する。
-     * ・対象ユーザーが存在する場合は削除確認画面を表示する。
+     * ・対象ユーザーが存在する場合は無効化確認画面を表示する。
      * ・対象ユーザーが存在しない場合は一覧画面へ戻す。
      *
      * @param id ユーザーID
      * @param model ThymeleafのModelオブジェクト
-     * @return 削除確認画面、またはユーザー一覧画面へのリダイレクト
+     * @return 無効化確認画面、またはユーザー一覧画面へのリダイレクト
      */
     @GetMapping("/delete/confirm/{id}")
     public String showDeleteConfirmPage(
@@ -567,29 +607,29 @@ public class UserProfileViewController {
     ) {
 
         logger.debug(
-                "Displaying user delete confirmation page: userId={}",
+                "Displaying user disabling confirmation page: userId={}",
                 id
         );
 
-        // 削除対象のユーザー情報を取得する。
+        // 無効化対象のユーザー情報を取得する。
         UserProfileDto user =
                 userProfileService
                         .getUserProfileById(id)
                         .map(this::convertToDto)
                         .orElse(null);
 
-        // 削除対象が存在しない場合は一覧画面へ戻す。
+        // 無効化対象が存在しない場合は一覧画面へ戻す。
         if (user == null) {
 
             logger.warn(
-                    "User not found for delete confirmation: userId={}",
+                    "User not found for disabling confirmation: userId={}",
                     id
             );
 
             return "redirect:/user/list";
         }
 
-        // 削除確認画面で使用するユーザー情報をModelへ設定する。
+        // 無効化確認画面で使用するユーザー情報をModelへ設定する。
         model.addAttribute(
                 "user",
                 user
@@ -599,18 +639,20 @@ public class UserProfileViewController {
     }
 
     /**
-     * 削除処理。
+     * ユーザー無効化処理。
      *
      * 【URL】
      * POST /user/delete/{id}
      *
      * 【正常時】
-     * ・削除完了画面へリダイレクトする。
+     * ・ユーザー情報は物理削除せず、activeをfalseにする。
+     * ・過去のシフト情報との関連は維持する。
+     * ・無効化完了画面へリダイレクトする。
      *
      * 【対象が存在しない場合】
      * ・ユーザー一覧画面へリダイレクトする。
      *
-     * ※既存の削除処理と画面遷移は変更しない。
+     * ※既存URLと画面遷移は維持する。
      *
      * @param id ユーザーID
      * @return 削除完了画面またはユーザー一覧画面へのリダイレクト
@@ -621,30 +663,30 @@ public class UserProfileViewController {
     ) {
 
         logger.debug(
-                "Processing user deletion: userId={}",
+                "Processing user disabling: userId={}",
                 id
         );
 
-        // Serviceを通じて指定ユーザーを削除する。
-        boolean isDeleted =
+        // Serviceを通じて指定ユーザーを物理削除せず無効化する。
+        boolean isDisabled =
                 userProfileService.deleteUserProfile(
                         id
                 );
 
-        // 削除成功時は完了画面へ移動する。
-        if (isDeleted) {
+        // 無効化成功時は既存の完了画面へ移動する。
+        if (isDisabled) {
 
             logger.info(
-                    "User deleted successfully: userId={}",
+                    "User disabled successfully: userId={}",
                     id
             );
 
             return "redirect:/user/delete/complete";
         }
 
-        // 対象ユーザーが存在しなかった場合は一覧画面へ戻す。
+        // 対象ユーザーが存在しない、または無効化済みの場合は一覧へ戻す。
         logger.warn(
-                "User not found during deletion: userId={}",
+                "User could not be disabled: userId={}",
                 id
         );
 
@@ -652,18 +694,18 @@ public class UserProfileViewController {
     }
 
     /**
-     * 削除完了画面の表示。
+     * ユーザー無効化完了画面の表示。
      *
      * 【URL】
      * GET /user/delete/complete
      *
-     * @return 削除完了画面のテンプレート名
+     * @return ユーザー無効化完了画面のテンプレート名
      */
     @GetMapping("/delete/complete")
     public String showDeleteCompletePage() {
 
         logger.debug(
-                "Displaying user delete completion page."
+                "Displaying user disabling completion page."
         );
 
         return "user/delete/complete";

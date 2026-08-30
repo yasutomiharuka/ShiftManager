@@ -5,9 +5,11 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 import org.slf4j.Logger;
@@ -38,7 +40,7 @@ import com.example.demo.service.UserProfileService;
  *
  * GET:
  * ・シフト生成画面を表示する。
- * ・対象部署・対象年月のユーザー情報を取得する。
+ * ・対象部署の有効ユーザー情報を取得する。
  * ・保存済みシフト情報を取得する。
  * ・必要人員フォームを取得する。
  *
@@ -54,7 +56,8 @@ import com.example.demo.service.UserProfileService;
  *
  * 【エラー発生時の役割】
  * ・シフト保存に失敗した場合、
- *   FlashAttributeのsubmittedShiftsを既存shiftMapへ重ねる。
+ *   対象部署の有効ユーザー・対象月に一致するsubmittedShiftsだけを
+ *   既存shiftMapへ重ねる。
  *
  * ・必要人員保存に失敗した場合、
  *   FlashAttributeのrequirementFormをDB取得値より優先する。
@@ -264,8 +267,10 @@ public class ShiftGenerationController {
             // 4. 部署に所属するユーザーを取得する
             // =========================================================
 
-            // UserProfileServiceから全ユーザーを取得し、
+            // 修正済みUserProfileService#getAllUserProfiles()は、
+            // active=trueの有効ユーザーだけを返す。
             // 選択された部署に所属するユーザーだけを表示対象とする。
+            // DTOにactiveを追加せず、Service側の絞り込みを利用する。
             List<UserProfileDto> users =
                     userProfileService
                             .getAllUserProfiles()
@@ -277,6 +282,16 @@ public class ShiftGenerationController {
                                     )
                             )
                             .toList();
+
+            // 画面に表示・復元してよいセルのキーを明示する。
+            // 保存エラー後にユーザーが無効化された場合や、
+            // 別部署・別月の入力値が残っている場合も、対象外のセルは復元しない。
+            Set<String> editableShiftKeys = new HashSet<>();
+            for (UserProfileDto user : users) {
+                for (LocalDate date : dates) {
+                    editableShiftKeys.add(user.getId() + "_" + date);
+                }
+            }
 
             logger.debug(
                     "Users loaded for shift generation: "
@@ -316,6 +331,10 @@ public class ShiftGenerationController {
                             )
                             : new HashMap<>();
 
+            // 表示用コピーだけを絞り込み、DB上の過去シフトは削除しない。
+            // ShiftService側が対象外のキーを返しても画面へ渡さない。
+            shiftMap.keySet().retainAll(editableShiftKeys);
+
             // =========================================================
             // 6. 保存失敗時の入力済みシフトを復元する
             // =========================================================
@@ -348,7 +367,8 @@ public class ShiftGenerationController {
                             // 画面側のシフトMapは、
                             // "ユーザーID_yyyy-MM-dd"形式の
                             // 文字列キーを使用する。
-                            if (key instanceof String shiftKey) {
+                            if (key instanceof String shiftKey
+                                    && editableShiftKeys.contains(shiftKey)) {
 
                                 // 勤務区分がnullの場合は空文字として扱う。
                                 //
@@ -367,7 +387,7 @@ public class ShiftGenerationController {
                 );
 
                 logger.debug(
-                        "Restored submitted shifts after an error: "
+                        "Received submitted shifts; only editable cells restored: "
                                 + "department={}, month={}, count={}",
                         department,
                         targetMonth,
@@ -473,7 +493,7 @@ public class ShiftGenerationController {
             // 10. Thymeleafへ画面表示データを渡す
             // =========================================================
 
-            // 部署に所属するユーザー一覧。
+            // 部署に所属する有効ユーザー一覧。
             model.addAttribute(
 
                     "users",
@@ -652,8 +672,8 @@ public class ShiftGenerationController {
      *
      * 【処理概要】
      * 1. 対象部署・対象年月を確認する。
-     * 2. 自動生成済みシフト（AUTO）を削除する。
-     * 3. 手入力シフト（MANUAL）は保持する。
+     * 2. 有効職員の対象部署・対象月のAUTOだけを再生成対象とする。
+     * 3. MANUALと無効職員の既存シフトは保持する。
      * 4. シフト自動生成処理を実行する。
      * 5. 同じ部署・年月の生成画面へリダイレクトする。
      *
@@ -924,8 +944,10 @@ public class ShiftGenerationController {
 
         try {
 
-            // 自動生成済みシフトの削除と、
-            // 手入力シフトを保持した補完処理を実行する。
+            // 修正済みServiceで有効職員だけを自動生成する。
+            // 有効職員のAUTOだけを削除・再生成し、
+            // MANUALと無効職員の既存シフトはそのまま保持する。
+            // 有効職員が0人の場合はServiceが削除・保存せず警告を返す。
             //
             // ShiftGenerationService側の@Transactionalにより、
             // 処理途中で例外が発生した場合はロールバックされる。
@@ -1054,7 +1076,7 @@ public class ShiftGenerationController {
      * 1. 自動生成に失敗する。
      * 2. submittedShiftsをFlashAttributeへ設定する。
      * 3. /shift/generateへリダイレクトする。
-     * 4. showGeneratePageがDB上のshiftMapへ入力値を重ねる。
+     * 4. showGeneratePageが有効職員・対象月の入力値だけを表示用shiftMapへ重ねる。
      * 5. 生成前に入力されていた勤務区分が再表示される。
      *
      * @param form シフト生成画面から送信されたフォーム
@@ -1077,6 +1099,8 @@ public class ShiftGenerationController {
 
         // 元のMapを直接引き回さず、
         // 入力順を保ったコピーとして次の画面へ渡す。
+        // 表示時に最新の有効職員一覧と照合し、対象外のセルを除外する。
+        // これは画面復元用であり、保存APIの無効職員チェックを代替しない。
         redirectAttributes.addFlashAttribute(
 
                 "submittedShifts",
