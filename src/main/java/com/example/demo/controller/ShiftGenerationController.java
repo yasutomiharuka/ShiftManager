@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -267,11 +268,8 @@ public class ShiftGenerationController {
             // 4. 部署に所属するユーザーを取得する
             // =========================================================
 
-            // 修正済みUserProfileService#getAllUserProfiles()は、
-            // active=trueの有効ユーザーだけを返す。
-            // 選択された部署に所属するユーザーだけを表示対象とする。
-            // DTOにactiveを追加せず、Service側の絞り込みを利用する。
-            List<UserProfileDto> users =
+            // 有効職員は、シフトの有無にかかわらず表示する。
+            List<UserProfileDto> activeUsers =
                     userProfileService
                             .getAllUserProfiles()
                             .stream()
@@ -283,21 +281,27 @@ public class ShiftGenerationController {
                             )
                             .toList();
 
-            // 画面に表示・復元してよいセルのキーを明示する。
-            // 保存エラー後にユーザーが無効化された場合や、
-            // 別部署・別月の入力値が残っている場合も、対象外のセルは復元しない。
-            Set<String> editableShiftKeys = new HashSet<>();
-            for (UserProfileDto user : users) {
-                for (LocalDate date : dates) {
-                    editableShiftKeys.add(user.getId() + "_" + date);
-                }
+            Set<Long> activeUserIds = new HashSet<>();
+            Map<Long, UserProfileDto> candidateUsers = new LinkedHashMap<>();
+
+            for (UserProfileDto user : activeUsers) {
+                activeUserIds.add(user.getId());
+                candidateUsers.put(user.getId(), user);
+            }
+
+            // 無効職員は現在の所属では絞らず候補へ追加する。
+            // 所属変更後に無効化された場合も、保存済みシフトの部署を基準に
+            // 対象部署・対象月の履歴を表示できるようにする。
+            for (UserProfileDto user : userProfileService.getInactiveUserProfiles()) {
+                candidateUsers.putIfAbsent(user.getId(), user);
             }
 
             logger.debug(
-                    "Users loaded for shift generation: "
-                            + "department={}, count={}",
+                    "Candidate users loaded for shift generation: "
+                            + "department={}, activeCount={}, candidateCount={}",
                     department,
-                    users.size()
+                    activeUsers.size(),
+                    candidateUsers.size()
             );
 
             // =========================================================
@@ -310,14 +314,13 @@ public class ShiftGenerationController {
             // 同一セルに複数のシフト候補がある場合は、
             // 優先順位と更新日時に従って1件にまとめる。
             Map<String, String> savedShiftMap =
-                    shiftService.getShiftMap(
-
-                            users,
-
-                            dates,
-
-                            department
-                    );
+                    candidateUsers.isEmpty()
+                            ? Map.of()
+                            : shiftService.getShiftMap(
+                                    new ArrayList<>(candidateUsers.values()),
+                                    dates,
+                                    department
+                            );
 
             // 保存エラー後に未保存の入力値を重ねるため、
             // 変更可能なHashMapとして作成する。
@@ -331,8 +334,36 @@ public class ShiftGenerationController {
                             )
                             : new HashMap<>();
 
-            // 表示用コピーだけを絞り込み、DB上の過去シフトは削除しない。
-            // ShiftService側が対象外のキーを返しても画面へ渡さない。
+            // 有効職員は常に表示し、無効職員は対象部署・対象月に
+            // 保存済みシフトが存在する場合だけ表示する。
+            List<UserProfileDto> users =
+                    candidateUsers.values()
+                            .stream()
+                            .filter(user ->
+                                    activeUserIds.contains(user.getId())
+                                            || dates.stream().anyMatch(date ->
+                                                    shiftMap.containsKey(
+                                                            user.getId() + "_" + date
+                                                    )
+                                            )
+                            )
+                            .toList();
+
+            Set<Long> inactiveUserIds = new HashSet<>();
+            for (UserProfileDto user : users) {
+                if (!activeUserIds.contains(user.getId())) {
+                    inactiveUserIds.add(user.getId());
+                }
+            }
+
+            // 画面に表示・復元してよいセルを、最終表示対象から作成する。
+            Set<String> editableShiftKeys = new HashSet<>();
+            for (UserProfileDto user : users) {
+                for (LocalDate date : dates) {
+                    editableShiftKeys.add(user.getId() + "_" + date);
+                }
+            }
+
             shiftMap.keySet().retainAll(editableShiftKeys);
 
             // =========================================================
@@ -583,6 +614,22 @@ public class ShiftGenerationController {
                     "shiftMap",
 
                     shiftMap
+            );
+
+            // generate.htmlで無効職員を識別し、氏名横へ「無効」と表示する。
+            model.addAttribute(
+
+                    "inactiveUserIds",
+
+                    inactiveUserIds
+            );
+
+            // 過去月は履歴の表示・手動訂正だけを許可し、自動生成は行わない。
+            model.addAttribute(
+
+                    "pastMonth",
+
+                    targetMonth.isBefore(YearMonth.now())
             );
 
             // シフト入力フォーム。
@@ -933,6 +980,47 @@ public class ShiftGenerationController {
                     resolvedDepartment,
 
                     null,
+
+                    redirectAttributes
+            );
+        }
+
+        YearMonth resolvedTargetMonth =
+                YearMonth.parse(normalizedTargetMonth);
+
+        // 過去月の自動生成は、画面上のボタン制御だけに依存せず
+        // Controllerでも拒否して既存シフトを保護する。
+        if (resolvedTargetMonth.isBefore(YearMonth.now())) {
+
+            logger.warn(
+                    "Past month shift generation was rejected: "
+                            + "department={}, targetMonth={}",
+                    resolvedDepartment,
+                    normalizedTargetMonth
+            );
+
+            preserveSubmittedShifts(
+
+                    form,
+
+                    redirectAttributes
+            );
+
+            redirectAttributes.addFlashAttribute(
+
+                    "errorMessage",
+
+                    "過去月のシフトは自動生成できません。"
+                            + "必要な修正は手動で行ってください。"
+            );
+
+            return redirectToGenerate(
+
+                    form,
+
+                    resolvedDepartment,
+
+                    normalizedTargetMonth,
 
                     redirectAttributes
             );

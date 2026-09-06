@@ -274,11 +274,31 @@ public class ShiftService {
 
 		String department = form.getDepartment().trim();
 		YearMonth targetMonth = form.getTargetMonth();
+		LocalDate startDate = targetMonth.atDay(1);
+		LocalDate endDate = targetMonth.atEndOfMonth();
+
+		// 無効職員は、対象部署・対象月に保存済みシフトがある場合だけ
+		// 過去シフトの手動訂正対象として許可する。
+		Set<Long> inactiveHistoryUserIds = shiftRepository
+				.findByDepartmentAndDateBetween(department, startDate, endDate)
+				.stream()
+				.filter(Objects::nonNull)
+				.map(Shift::getUser)
+				.filter(Objects::nonNull)
+				.filter(user -> Boolean.FALSE.equals(user.getActive()))
+				.map(UserProfile::getId)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toSet());
+
 		List<ValidatedShiftCell> cells = new ArrayList<>();
 
 		// 1件でも不正なセルがあれば、DBを更新する前に処理全体を中止する。
 		for (Map.Entry<String, String> entry : form.getShifts().entrySet()) {
-			ValidatedShiftCell cell = validateShiftCell(entry, department, targetMonth);
+			ValidatedShiftCell cell = validateShiftCell(
+					entry,
+					department,
+					targetMonth,
+					inactiveHistoryUserIds);
 			cells.add(cell);
 		}
 
@@ -303,18 +323,23 @@ public class ShiftService {
 
 			shift.setShiftType(cell.value());
 			shift.setStatus(status);
+			// 画面から保存した値は、既存行がAUTOでも手動訂正として保護する。
+			shift.setSourceType(Shift.SourceType.MANUAL);
 			shiftRepository.save(shift);
 		}
 	}
 
 	/**
 	 * 保存対象の1セルを検証する。
-	 * 無効職員・存在しない職員・別部署・対象月外は保存も削除も許可しない。
+	 * 有効職員は現在の所属部署が一致する場合に許可する。
+	 * 無効職員は対象部署・対象月に保存済み履歴がある場合だけ許可する。
+	 * 存在しない職員・対象外職員・対象月外は保存も削除も許可しない。
 	 */
 	private ValidatedShiftCell validateShiftCell(
 			Map.Entry<String, String> entry,
 			String department,
-			YearMonth targetMonth) {
+			YearMonth targetMonth,
+			Set<Long> inactiveHistoryUserIds) {
 
 		String key = entry.getKey();
 		if (!StringUtils.hasText(key)) {
@@ -345,11 +370,13 @@ public class ShiftService {
 		UserProfile user = userProfileRepository.findById(userId)
 				.orElseThrow(() -> new IllegalArgumentException("User not found: " + userId));
 
-		if (!Boolean.TRUE.equals(user.getActive())) {
-			throw new IllegalArgumentException("Inactive user cannot be edited: " + userId);
-		}
-		if (!department.equalsIgnoreCase(user.getDepartment())) {
-			throw new IllegalArgumentException("User does not belong to department: " + userId);
+		if (Boolean.TRUE.equals(user.getActive())) {
+			if (!department.equalsIgnoreCase(user.getDepartment())) {
+				throw new IllegalArgumentException("User does not belong to department: " + userId);
+			}
+		} else if (!inactiveHistoryUserIds.contains(userId)) {
+			throw new IllegalArgumentException(
+					"Inactive user has no shift history in target department and month: " + userId);
 		}
 
 		String value = entry.getValue() == null ? "" : entry.getValue().trim();
@@ -404,14 +431,24 @@ public class ShiftService {
 				+ ", month=" + targetMonth
 				+ ", confirmedCount=" + confirmedList.size());
 
-		// 有効職員だけをCONFIRMED → DRAFTへ変更する。
-		// 無効職員の確定状態は過去シフト履歴として保持する。
+		// 更新開始前に全件を検証し、途中まで確定解除されることを防ぐ。
 		for (Shift shift : confirmedList) {
-			if (shift.getUser() == null
-					|| !Boolean.TRUE.equals(shift.getUser().getActive())
-					|| !department.equalsIgnoreCase(shift.getUser().getDepartment())) {
-				continue;
+			UserProfile user = shift.getUser();
+			if (user == null || user.getId() == null) {
+				throw new IllegalArgumentException("Confirmed shift has no user");
 			}
+			// 無効職員は、この検索結果自体が対象部署・対象月の履歴であるため許可する。
+			// 現在も有効な職員は、現在の所属部署が一致する場合だけ許可する。
+			if (Boolean.TRUE.equals(user.getActive())
+					&& !department.equalsIgnoreCase(user.getDepartment())) {
+				throw new IllegalArgumentException(
+						"Active user does not belong to department: " + user.getId());
+			}
+		}
+
+		// 全件の検証後に、対象部署・対象月の有効職員と無効職員を
+		// CONFIRMEDからDRAFTへ変更する。
+		for (Shift shift : confirmedList) {
 			shift.setStatus(Status.DRAFT);
 			shiftRepository.save(shift);
 		}

@@ -90,10 +90,10 @@ public class ShiftEditController {
     // シフトの保存・確定解除を担当するService。
     private final ShiftService shiftService;
 
-    // 保存直前に、有効職員と所属部署をDBから確認する。
+    // 保存直前に、職員の有効状態と所属部署をDBから確認する。
     private final UserProfileRepository userProfileRepository;
 
-    // 現行Serviceの一括確定解除が無効職員の履歴を変更しないか事前確認する。
+    // 対象部署・対象月の保存済みシフトから、編集可能な無効職員を判定する。
     private final ShiftRepository shiftRepository;
 
     /**
@@ -694,8 +694,8 @@ public class ShiftEditController {
      * 操作対象を検証する。問題がなければnull、問題があれば画面用メッセージを返す。
      *
      * このチェックはController入口の防御。
-     * 他の呼び出し元や検証後の無効化との競合にも対応するには、
-     * Serviceの更新トランザクション内でも有効状態・所属を検証する必要がある。
+     * 他の呼び出し元や検証後の状態変更との競合にも対応するには、
+     * Serviceの更新トランザクション内でも同じ条件を検証する必要がある。
      */
     private String validateShiftTargets(ShiftGenerationForm form, String action) {
 
@@ -712,23 +712,47 @@ public class ShiftEditController {
             activeUserIds.add(user.getId());
         }
 
+        LocalDate startDate = form.getTargetMonth().atDay(1);
+        LocalDate endDate = form.getTargetMonth().atEndOfMonth();
+
+        // 無効職員は、対象部署・対象月に保存済みシフトがある場合だけ
+        // 過去シフトの手動訂正対象として許可する。
+        Set<Long> inactiveHistoryUserIds = new HashSet<>();
+        List<Shift> existingShifts =
+                shiftRepository.findByDepartmentAndDateBetween(
+                        form.getDepartment(),
+                        startDate,
+                        endDate
+                );
+
+        for (Shift shift : existingShifts) {
+            UserProfile user = shift.getUser();
+            if (user != null
+                    && user.getId() != null
+                    && Boolean.FALSE.equals(user.getActive())) {
+                inactiveHistoryUserIds.add(user.getId());
+            }
+        }
+
+        Set<Long> editableUserIds = new HashSet<>(activeUserIds);
+        editableUserIds.addAll(inactiveHistoryUserIds);
+
         if ("UNCONFIRM".equals(action)) {
-            // 現行Serviceはform.shiftsを見ず、部署・月の全確定行を更新する。
-            // 送信キーだけの検証では無効職員を保護できないため、実際の更新範囲を調べる。
+            // 現行Serviceはform.shiftsを見ず、部署・月の全確定行を更新するため、
+            // 実際の更新範囲に対象外職員が含まれないことを事前確認する。
             List<Shift> confirmedShifts =
                     shiftRepository.findByDepartmentAndDateBetweenAndStatus(
                             form.getDepartment(),
-                            form.getTargetMonth().atDay(1),
-                            form.getTargetMonth().atEndOfMonth(),
+                            startDate,
+                            endDate,
                             Shift.Status.CONFIRMED);
 
             for (Shift shift : confirmedShifts) {
                 if (shift.getUser() == null
-                        || !activeUserIds.contains(shift.getUser().getId())) {
-                    return "対象月に無効化された職員、または所属が変更された職員の"
-                            + "確定シフトがあるため、一括で確定解除できません。"
-                            + "履歴を保護するため、処理を中止しました。"
-                            + "有効職員分だけの確定解除には、保存Serviceの対応が必要です。";
+                        || !editableUserIds.contains(shift.getUser().getId())) {
+                    return "対象月に存在しない職員、または対象外の職員の"
+                            + "確定シフトが含まれています。"
+                            + "安全のため、確定解除は行っていません。";
                 }
             }
             return null;
@@ -767,8 +791,10 @@ public class ShiftEditController {
             }
 
             // 値が空欄や「-」の削除操作でも必ず検証する。
-            if (!activeUserIds.contains(userId)) {
-                return "無効化された職員、存在しない職員、または別部署の職員が"
+            // 無効職員は、対象部署・対象月に保存済み履歴がある場合だけ許可する。
+            if (!editableUserIds.contains(userId)) {
+                return "存在しない職員、別部署の職員、または対象月に"
+                        + "保存済みシフトがない無効職員が"
                         + "入力内容に含まれています。保存は行っていません。"
                         + "画面を再表示して、対象職員を確認してください。";
             }
@@ -797,7 +823,7 @@ public class ShiftEditController {
      * 2. 変更済みセルをsubmittedShiftsとして保存する。
      * 3. /shift/generateへリダイレクトする。
      * 4. ShiftGenerationControllerがDB上のshiftMapへ
-     *    有効職員・対象月に一致するsubmittedShiftsだけを重ねて画面へ渡す。
+     *    表示対象職員・対象月に一致するsubmittedShiftsだけを重ねて画面へ渡す。
      * 5. 保存されなかった入力内容が画面上に再表示される。
      *
      * 【注意】

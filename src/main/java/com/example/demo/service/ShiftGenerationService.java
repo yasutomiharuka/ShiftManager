@@ -3,6 +3,7 @@ package com.example.demo.service;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.YearMonth;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,6 +26,9 @@ import com.example.demo.repository.UserProfileRepository;
 
 @Service
 public class ShiftGenerationService {
+
+    // 過去月判定は、システムの運用地域である日本時間を基準にする。
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Tokyo");
 
     private final UserProfileRepository userProfileRepository;
     private final ShiftRequirementRepository shiftRequirementRepository;
@@ -53,10 +57,11 @@ public class ShiftGenerationService {
      * シフト自動生成を実行する。
      *
      * 処理概要：
-     * 1. 有効職員だけを取得し、その職員の対象部署・月のAUTOだけを削除
-     * 2. 既存シフト・職員・必要人員を取得してContextを作成
-     * 3. 夜勤・日勤・月9休を順に自動割当
-     * 4. 自動生成したシフトをAUTOとして保存
+     * 1. 過去月でないことを確認
+     * 2. 有効職員だけを取得し、その職員の対象部署・月のAUTOだけを削除
+     * 3. 既存シフト・職員・必要人員を取得してContextを作成
+     * 4. 夜勤・日勤・月9休を順に自動割当
+     * 5. 自動生成したシフトをAUTOとして保存
      *
      * 注意：
      * ・手入力シフト（MANUAL）は削除・上書きしない
@@ -72,6 +77,15 @@ public class ShiftGenerationService {
     public ShiftGenerationResult generateComplementShift(String department, String targetMonth) {
 
         YearMonth ym = YearMonth.parse(targetMonth);
+
+        // 過去月のシフトは履歴表示と手動訂正だけを許可する。
+        // Controllerを経由しない呼び出しでも既存シフトを変更しないよう、
+        // Repositoryの参照・AUTO削除より前に拒否する。
+        if (ym.isBefore(YearMonth.now(BUSINESS_ZONE))) {
+            throw new IllegalArgumentException(
+                    "Past month shifts cannot be generated: " + ym);
+        }
+
         LocalDate startDate = ym.atDay(1);
         LocalDate endDate = ym.atEndOfMonth();
 

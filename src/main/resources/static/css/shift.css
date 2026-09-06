@@ -92,6 +92,16 @@
     background: #edf4ff;
 }
 
+/* 過去月は編集可能だが、自動生成の対象外であることを案内する。 */
+.past-month-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-color: #e7c56b;
+    color: #694c00;
+    background: #fff8df;
+}
+
 .muted {
     color: var(--muted);
     font-size: 0.82rem;
@@ -250,6 +260,28 @@
     background: #e8eef6;
 }
 
+/* 無効職員は履歴編集が可能なため、セル全体をdisabled風にはしない。 */
+.shift-table .shift-user--inactive td:first-child,
+.shift-table .shift-user--inactive .sticky-col {
+    color: #5f6672;
+    background: #f3f4f6;
+}
+
+.inactive-user-badge {
+    display: inline-flex;
+    margin-left: 6px;
+    padding: 2px 6px;
+    align-items: center;
+    border: 1px solid #c7ccd4;
+    border-radius: 999px;
+    color: #5a616c;
+    background: #e5e7eb;
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.2;
+    vertical-align: middle;
+}
+
 .shift-table tbody tr:nth-child(even) td:not(:first-child) {
     background-color: #fafbfd;
 }
@@ -321,6 +353,17 @@
 .shift-link-button:hover,
 .shift-page__actions a:hover {
     transform: translateY(-1px);
+}
+
+.shift-button:disabled,
+.shift-button:disabled:hover {
+    border-color: #cbd2dc;
+    color: #7a8493;
+    background: #e5e8ed;
+    box-shadow: none;
+    cursor: not-allowed;
+    opacity: 0.82;
+    transform: none;
 }
 
 .shift-button--primary {
@@ -424,6 +467,12 @@
 
     .panel--sticky-tools {
         top: 4px;
+    }
+
+    .past-month-notice {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
     }
 
     .palette .muted {

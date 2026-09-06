@@ -415,6 +415,12 @@
 		シフト生成
 	</h2>
 
+	<!-- 過去月は履歴の手動訂正だけを許可し、自動生成は行わない。 -->
+	<div class="panel past-month-notice" th:if="${pastMonth}" role="status">
+		<strong>過去月のシフトを表示しています。</strong>
+		<span>セルの編集・一時保存・確定・確定解除は可能ですが、自動生成はできません。</span>
+	</div>
+
 
 	<!-- ▼ データ欠落時の早期案内パネル -->
 	<div class="panel" style="background:#fffde7;" th:if="${(users == null or #lists.isEmpty(users)) 
@@ -489,8 +495,13 @@
 		<!-- ▼ shiftMap が空なら初期案内 -->
 		<div class="panel" style="background:#f1f8e9;" th:if="${shiftMap == null or #maps.isEmpty(shiftMap)}">
 			<div class="muted">
-				この月のシフトデータはまだ登録されていません。<br>
-				セルをクリックして入力するか、<strong>「シフトを生成する」</strong> を押して自動割当を実行してください。
+				<span th:if="${pastMonth}">
+					この過去月には表示できるシフトデータがありません。必要な場合はセルへ手動入力して保存してください。
+				</span>
+				<span th:unless="${pastMonth}">
+					この月のシフトデータはまだ登録されていません。<br>
+					セルをクリックして入力するか、<strong>「シフトを生成する」</strong> を押して自動割当を実行してください。
+				</span>
 			</div>
 		</div>
 
@@ -507,10 +518,13 @@
 			</thead>
 			<tbody>
 				<!-- ▼ 1行＝1ユーザー -->
-				<tr th:each="user : ${users != null ? users : {}}">
-					<td class="sticky-col"
-						th:text="${(user != null && user.lastName != null ? user.lastName : '') + ' ' + (user != null && user.firstName != null ? user.firstName : '')}">
-						氏名 </td>
+				<tr th:each="user : ${users != null ? users : {}}"
+					th:classappend="${inactiveUserIds != null and inactiveUserIds.contains(user.id) ? 'shift-user--inactive' : ''}">
+					<td class="sticky-col">
+						<span th:text="${(user != null && user.lastName != null ? user.lastName : '') + ' ' + (user != null && user.firstName != null ? user.firstName : '')}">氏名</span>
+						<span class="inactive-user-badge"
+							th:if="${inactiveUserIds != null and inactiveUserIds.contains(user.id)}">無効</span>
+					</td>
 
 					<!-- key変数をやめて一か所にまとめる -->
 					<td th:each="d : ${dates != null ? dates : {}}"
@@ -583,7 +597,8 @@
 			</button>
 
 			<!-- 自動割当 実行（既存の生成処理へ） -->
-			<button type="submit" class="shift-button shift-button--generate" th:formaction="@{/shift/generate}" formmethod="post">
+			<button type="submit" class="shift-button shift-button--generate" th:formaction="@{/shift/generate}" formmethod="post"
+				th:disabled="${pastMonth}" th:attr="aria-disabled=${pastMonth},title=${pastMonth ? '過去月のシフトは自動生成できません' : 'シフトを自動生成します'}">
 				シフトを生成する
 			</button>
 
