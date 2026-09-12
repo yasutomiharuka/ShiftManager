@@ -22,6 +22,7 @@ import com.example.demo.form.ShiftRequirementForm;
 import com.example.demo.service.ShiftGenerationService;
 import com.example.demo.service.ShiftRequirementService;
 import com.example.demo.service.ShiftService;
+import com.example.demo.service.StaffingBalanceService;
 import com.example.demo.service.UserProfileService;
 
 class ShiftGenerationControllerTest {
@@ -30,6 +31,7 @@ class ShiftGenerationControllerTest {
     private UserProfileService userProfileService;
     private ShiftService shiftService;
     private ShiftRequirementService shiftRequirementService;
+    private StaffingBalanceService staffingBalanceService;
     private ShiftGenerationController controller;
 
     @BeforeEach
@@ -38,11 +40,13 @@ class ShiftGenerationControllerTest {
         userProfileService = mock(UserProfileService.class);
         shiftService = mock(ShiftService.class);
         shiftRequirementService = mock(ShiftRequirementService.class);
+        staffingBalanceService = mock(StaffingBalanceService.class);
         controller = new ShiftGenerationController(
                 shiftGenerationService,
                 userProfileService,
                 shiftService,
-                shiftRequirementService);
+                shiftRequirementService,
+                staffingBalanceService);
     }
 
     @Test
@@ -60,6 +64,10 @@ class ShiftGenerationControllerTest {
                 .thenReturn(Map.of(inactiveShiftKey, "日"));
         when(shiftRequirementService.buildForm("amami", pastMonth))
                 .thenReturn(new ShiftRequirementForm());
+        Map<String, Integer> balanceMap =
+                Map.of(pastMonth.atDay(1) + "_9-14", 0);
+        when(staffingBalanceService.buildStaffingBalanceMap("amami", pastMonth))
+                .thenReturn(balanceMap);
 
         ExtendedModelMap model = new ExtendedModelMap();
         String view = controller.showGeneratePage("amami", pastMonth, model);
@@ -76,6 +84,9 @@ class ShiftGenerationControllerTest {
         assertThat(displayedUsers).containsExactly(active, inactive);
         assertThat(inactiveUserIds).containsExactly(2L);
         assertThat(model.get("pastMonth")).isEqualTo(true);
+        assertThat(model.get("staffingBalanceMap")).isEqualTo(balanceMap);
+        verify(staffingBalanceService)
+                .buildStaffingBalanceMap("amami", pastMonth);
     }
 
     @Test

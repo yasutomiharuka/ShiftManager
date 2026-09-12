@@ -468,7 +468,8 @@ public class ShiftGenerationService {
   * ルール：
   * ・9-14 / 14-16 / 16-18 の必要人員を確認する
   * ・既存の日勤、パート勤務を時間帯別にカウントする
-  * ・不足している時間帯がある場合のみ日勤または時間帯勤務を追加する
+  * ・不足している時間帯を優先して日勤または時間帯勤務を追加する
+  * ・必要人員を満たした後も、勤務可能な職員には勤務区分を割り当てる
   * ・正社員の日勤は「日」として保存し、9-14 / 14-16 / 16-18 の全時間帯に1人としてカウントする
   * ・パート勤務は職員ごとの曜日別勤務時間に応じて「9-14」「14-16」「16-18」「14-18」などで保存する
   * ・手入力セルは上書きしない
@@ -499,7 +500,57 @@ public class ShiftGenerationService {
              // 日勤または時間帯勤務を1人追加したため、時間帯別の不足人数を再計算する
              shortageMap = calculateShortageByTimeSlot(context, date);
          }
+
+         // 必要人数の充足後も、勤務可能な職員を空欄のまま残さない。
+         // 同じ候補判定を通すことで、手入力・曜日設定・連勤上限を維持する。
+         assignRemainingDayShifts(context, date);
      }
+ }
+
+ /**
+  * 必要人員の充足後に、当日勤務可能な残りの職員へ日勤を割り当てる。
+  */
+ private void assignRemainingDayShifts(ShiftGenerationContext context, LocalDate date) {
+
+     while (true) {
+         UserProfile candidate = findRemainingDayCandidate(context, date);
+
+         if (candidate == null) {
+             return;
+         }
+
+         setAutoShift(
+                 context,
+                 candidate.getId(),
+                 date,
+                 resolveAutoDayShiftType(candidate, date)
+         );
+     }
+ }
+
+ /**
+  * 必要人数とは無関係に、当日勤務可能な候補者を公平な順序で1人返す。
+  */
+ private UserProfile findRemainingDayCandidate(
+         ShiftGenerationContext context,
+         LocalDate date) {
+
+     UserProfile bestCandidate = null;
+     int bestScore = Integer.MIN_VALUE;
+
+     for (UserProfile user : context.getUsers()) {
+         if (!canAssignDayShift(context, user, date)) {
+             continue;
+         }
+
+         int score = scoreDayCandidate(context, user, date);
+         if (score > bestScore) {
+             bestScore = score;
+             bestCandidate = user;
+         }
+     }
+
+     return bestCandidate;
  }
 
  /**
@@ -557,6 +608,11 @@ public class ShiftGenerationService {
 
      // 既に夜・明・休・有・日・9-14などが入っている場合は対象外
      if (!isBlank(context, userId, date)) {
+         return false;
+     }
+
+     // 雇用形態を問わず、曜日固定休には日勤を割り当てない
+     if (isFixedOffDay(user, date)) {
          return false;
      }
 
@@ -1125,6 +1181,11 @@ public class ShiftGenerationService {
 private void assignMonthlyOffDays(ShiftGenerationContext context, ShiftGenerationResult result) {
 
   for (UserProfile user : context.getUsers()) {
+      // パート勤務は曜日別の固定勤務時間・固定休に従うため、月9休の対象外とする。
+      if (isPartTimeUser(user)) {
+          continue;
+      }
+
       Long userId = user.getId();
 
       int offCount = countMonthlyOffDays(context, userId);
@@ -1244,6 +1305,11 @@ private int scoreOffCandidateDate(ShiftGenerationContext context, UserProfile us
     Long userId = user.getId();
     int score = 0;
 
+    // 職員情報に登録された曜日固定休を、月9休へ優先的に反映する
+    if (isFixedOffDay(user, date)) {
+        score += 40;
+    }
+
     // 明の翌日は休にしやすいので優先
     LocalDate prevDate = date.minusDays(1);
     if (context.getDates().contains(prevDate)
@@ -1278,6 +1344,9 @@ private int scoreOffCandidateDate(ShiftGenerationContext context, UserProfile us
 private void validateMonthlyOffDays(ShiftGenerationContext context, ShiftGenerationResult result) {
 
     for (UserProfile user : context.getUsers()) {
+        if (isPartTimeUser(user)) {
+            continue;
+        }
 
         int offCount = countMonthlyOffDays(context, user.getId());
 

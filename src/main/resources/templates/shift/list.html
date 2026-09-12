@@ -365,8 +365,8 @@
                     <!-- 職員ごとの勤務情報 -->
                     <tr th:each="user : ${users}">
 
-                        <!-- 職員名 -->
-                        <td th:text="${user.lastName + ' ' + user.firstName}">
+                        <!-- このアプリでは firstName=姓、lastName=名 -->
+                        <td th:text="${user.firstName + ' ' + user.lastName}">
                         </td>
 
                         <!--
@@ -385,23 +385,25 @@
                                 時間帯勤務は専用の CSS クラスへ変換し、
                                 日・夜・明・休・有などは勤務区分をそのまま使用する。
                         -->
-                        <td
-                            th:each="d : ${dates}"
-                            th:with="
-                                dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
-                                raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
-                                val=${raw != null ? #strings.trim(raw) : null},
-                                shiftClass=${val == '9-14' ? 'shift-9-14' :
-                                    (val == '14-16' ? 'shift-14-16' :
-                                    (val == '16-18' ? 'shift-16-18' :
-                                    (val == '14-18' ? 'shift-14-18' :
-                                    (!#strings.isEmpty(val) ? val : ''))))}
-                            "
-                            th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
-                            th:text="${!#strings.isEmpty(val) ? val : '-'}"
-                            th:classappend="${shiftClass}">
-
-                        </td>
+						<td
+						    th:each="d : ${dates}"
+						    th:with="
+						        dateKey=${#temporals.format(d, 'yyyy-MM-dd')},
+						        raw=${shiftMap != null ? shiftMap[user.id + '_' + dateKey] : null},
+						        val=${raw != null ? #strings.trim(raw) : null},
+						        displayVal=${!#strings.isEmpty(val)
+						            ? val
+						            : (user.employmentType == 'parttime' ? '休' : '-')},
+						        shiftClass=${displayVal == '9-14' ? 'shift-9-14' :
+						            (displayVal == '14-16' ? 'shift-14-16' :
+						            (displayVal == '16-18' ? 'shift-16-18' :
+						            (displayVal == '14-18' ? 'shift-14-18' :
+						            (displayVal != '-' ? displayVal : ''))))}
+						    "
+						    th:attr="title=${user.id + '_' + dateKey + ' = ' + (val != null ? val : 'null')}"
+						    th:text="${displayVal}"
+						    th:classappend="${shiftClass}">
+						</td>
 
                     </tr>
 

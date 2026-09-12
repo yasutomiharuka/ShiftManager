@@ -34,6 +34,7 @@ import com.example.demo.service.ShiftGenerationResult;
 import com.example.demo.service.ShiftGenerationService;
 import com.example.demo.service.ShiftRequirementService;
 import com.example.demo.service.ShiftService;
+import com.example.demo.service.StaffingBalanceService;
 import com.example.demo.service.UserProfileService;
 
 /**
@@ -92,6 +93,9 @@ public class ShiftGenerationController {
     // シフト本体（誰が入るか）とは別の集約として管理する。
     private final ShiftRequirementService shiftRequirementService;
 
+    // 日付・時間帯別の勤務人数と必要人数の過不足を算出するサービス。
+    private final StaffingBalanceService staffingBalanceService;
+
     /**
      * シフト生成画面で使用する各サービスを注入する。
      *
@@ -108,7 +112,9 @@ public class ShiftGenerationController {
 
             ShiftService shiftService,
 
-            ShiftRequirementService shiftRequirementService
+            ShiftRequirementService shiftRequirementService,
+
+            StaffingBalanceService staffingBalanceService
     ) {
 
         this.shiftGenerationService =
@@ -122,6 +128,9 @@ public class ShiftGenerationController {
 
         this.shiftRequirementService =
                 shiftRequirementService;
+
+        this.staffingBalanceService =
+                staffingBalanceService;
     }
 
     /**
@@ -520,6 +529,14 @@ public class ShiftGenerationController {
                         );
             }
 
+            // 保存済みシフトと必要人員から、画面表示時点の過不足を再計算する。
+            // 自動生成後は同じ画面へリダイレクトされるため、生成結果もここで反映される。
+            Map<String, Integer> staffingBalanceMap =
+                    staffingBalanceService.buildStaffingBalanceMap(
+                            department,
+                            targetMonth
+                    );
+
             // =========================================================
             // 10. Thymeleafへ画面表示データを渡す
             // =========================================================
@@ -614,6 +631,13 @@ public class ShiftGenerationController {
                     "shiftMap",
 
                     shiftMap
+            );
+
+            model.addAttribute(
+
+                    "staffingBalanceMap",
+
+                    staffingBalanceMap
             );
 
             // generate.htmlで無効職員を識別し、氏名横へ「無効」と表示する。
