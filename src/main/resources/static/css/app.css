@@ -155,10 +155,10 @@ a {
 }
 
 .login-card {
-    width: min(100%, 420px);
+    width: min(100%, 480px);
 }
 
-.login-card h2 {
+.login-card > h1 {
     margin: 0 0 12px;
     font-size: 2rem;
     letter-spacing: 0.02em;
@@ -168,6 +168,79 @@ a {
     margin: 0 0 34px;
     color: var(--muted);
     font-size: 0.9rem;
+    line-height: 1.8;
+}
+
+.guest-guide {
+    margin: 0 0 28px;
+    padding: 18px;
+    border: 1px solid #cdddf8;
+    border-radius: 12px;
+    background: var(--blue-soft);
+}
+
+.guest-guide__heading {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.guest-guide__icon {
+    display: grid;
+    min-width: 42px;
+    height: 28px;
+    padding: 0 8px;
+    place-items: center;
+    border-radius: 7px;
+    color: #fff;
+    background: var(--blue);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.guest-guide__heading h2 {
+    margin: 0 0 3px;
+    font-size: 0.95rem;
+}
+
+.guest-guide__heading p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.76rem;
+    line-height: 1.5;
+}
+
+.guest-guide__credentials {
+    display: grid;
+    margin: 15px 0 0;
+    gap: 8px;
+}
+
+.guest-guide__credentials > div {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    align-items: center;
+}
+
+.guest-guide__credentials dt {
+    color: var(--muted);
+    font-size: 0.76rem;
+}
+
+.guest-guide__credentials dd {
+    margin: 0;
+    color: var(--navy);
+    font-family: Consolas, Monaco, monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.guest-guide__notes {
+    margin: 15px 0 0;
+    padding: 13px 0 0 20px;
+    border-top: 1px solid #cdddf8;
+    color: var(--muted);
+    font-size: 0.72rem;
     line-height: 1.8;
 }
 

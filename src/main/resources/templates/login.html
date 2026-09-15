@@ -14,35 +14,109 @@
                     <span class="brand__mark" aria-hidden="true">S</span>
                     <span>ShiftManager</span>
                 </div>
+
                 <p class="eyebrow">WELCOME BACK</p>
-                <h2 id="login-title">ログイン</h2>
-                <p class="login-card__lead">登録済みのユーザー名とパスワードを入力してください。</p>
+                <h1 id="login-title">ログイン</h1>
+                <p class="login-card__lead">
+                    登録済みのユーザー名とパスワードを入力してください。
+                </p>
 
-                <div class="alert alert--success" role="status" th:if="${message}">
+                <div class="guest-guide" aria-labelledby="guest-guide-title">
+                    <div class="guest-guide__heading">
+                        <span class="guest-guide__icon" aria-hidden="true">
+                            体験
+                        </span>
+                        <div>
+                            <h2 id="guest-guide-title">
+                                ゲストログイン
+                            </h2>
+                            <p>
+                                ポートフォリオをご覧の方はこちらをご利用ください。
+                            </p>
+                        </div>
+                    </div>
+
+                    <dl class="guest-guide__credentials">
+                        <div>
+                            <dt>ユーザー名</dt>
+                            <dd>guest</dd>
+                        </div>
+                        <div>
+                            <dt>パスワード</dt>
+                            <dd>1234</dd>
+                        </div>
+                    </dl>
+
+                    <ul class="guest-guide__notes">
+                        <li>
+                            登録されている職員情報はすべて架空です。
+                        </li>
+                        <li>
+                            シフトの確認・作成・編集をお試しいただけます。
+                        </li>
+                        <li>
+                            ユーザーの登録・編集・無効化もお試しいただけます。
+                        </li>
+                        <li>
+                            操作内容は保存され、ほかの利用者にも共有されます。
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="alert alert--success"
+                     role="status"
+                     th:if="${message}">
                     <span aria-hidden="true">✓</span>
-                    <p th:text="${message}">ログアウトしました。</p>
+                    <p th:text="${message}">
+                        ログアウトしました。
+                    </p>
                 </div>
-                <div class="alert alert--error" role="alert" th:if="${error}">
+
+                <div class="alert alert--error"
+                     role="alert"
+                     th:if="${error}">
                     <span aria-hidden="true">!</span>
-                    <p th:text="${error}">ユーザー名またはパスワードが正しくありません。</p>
+                    <p th:text="${error}">
+                        ユーザー名またはパスワードが正しくありません。
+                    </p>
                 </div>
 
-                <form class="login-form" th:action="@{/login}" action="/login" method="post">
-                    <input type="hidden" name="_csrf" th:value="${_csrf.token}">
+                <form class="login-form"
+                      th:action="@{/login}"
+                      action="/login"
+                      method="post">
+
+                    <input type="hidden"
+                           name="_csrf"
+                           th:value="${_csrf.token}">
 
                     <div class="form-field">
-                        <label for="username">ユーザー名</label>
-                        <input type="text" id="username" name="username" autocomplete="username"
-                               placeholder="ユーザー名を入力" required autofocus>
+                        <label for="username">
+                            ユーザー名
+                        </label>
+                        <input type="text"
+                               id="username"
+                               name="username"
+                               autocomplete="username"
+                               placeholder="ユーザー名を入力"
+                               required
+                               autofocus>
                     </div>
 
                     <div class="form-field">
-                        <label for="password">パスワード</label>
-                        <input type="password" id="password" name="password" autocomplete="current-password"
-                               placeholder="パスワードを入力" required>
+                        <label for="password">
+                            パスワード
+                        </label>
+                        <input type="password"
+                               id="password"
+                               name="password"
+                               autocomplete="current-password"
+                               placeholder="パスワードを入力"
+                               required>
                     </div>
 
-                    <button class="button button--primary button--full" type="submit">
+                    <button class="button button--primary button--full"
+                            type="submit">
                         ログイン
                         <span aria-hidden="true">→</span>
                     </button>

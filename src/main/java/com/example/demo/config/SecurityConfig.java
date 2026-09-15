@@ -1,12 +1,13 @@
 package com.example.demo.config;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.csrf.HttpSessionCsrfTokenRepository;
 import org.springframework.security.web.session.HttpSessionEventPublisher;
@@ -18,100 +19,149 @@ public class SecurityConfig {
 
     private final UserProfileDetailsService userDetailsService;
 
-    public SecurityConfig(UserProfileDetailsService userDetailsService) {
+    public SecurityConfig(
+            UserProfileDetailsService userDetailsService
+    ) {
         this.userDetailsService = userDetailsService;
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            @Qualifier("guestUserDetailsService")
+            InMemoryUserDetailsManager guestUserDetailsService
+    ) throws Exception {
 
         http
-            // セッション管理の設定
+            /*
+             * DBに登録されている通常ユーザーと、
+             * メモリ上のゲストユーザーの両方を認証対象にする。
+             */
+            .authenticationProvider(
+                    databaseAuthenticationProvider()
+            )
+            .authenticationProvider(
+                    guestAuthenticationProvider(
+                            guestUserDetailsService
+                    )
+            )
+
+            /*
+             * 同じゲストアカウントを複数人が利用できるよう、
+             * 同時セッション数を10件まで許可する。
+             */
             .sessionManagement(session -> session
-                .maximumSessions(1)
-                // 上限を超えた場合、既存セッションを無効化
+                .maximumSessions(10)
                 .maxSessionsPreventsLogin(false)
                 .and()
-                // セッションフィクセーション攻撃を防止
                 .sessionFixation().migrateSession()
             )
 
-            // CSRF保護の設定
             .csrf(csrf -> csrf
                 .csrfTokenRepository(
-                    new HttpSessionCsrfTokenRepository()
+                        new HttpSessionCsrfTokenRepository()
                 )
             )
 
-            // 認可ルールの設定
             .authorizeHttpRequests(auth -> auth
+                /*
+                 * ログイン画面、エラー画面、CSSなどは
+                 * ログインしていない状態でも利用可能。
+                 */
                 .requestMatchers(
-                    "/api/register",
-                    "/login",
-                    "/user/register/**",
-                    "/error/**",
-                    "/css/**",
-                    "/js/**",
-                    "/images/**"
+                        "/login",
+                        "/error/**",
+                        "/css/**",
+                        "/js/**",
+                        "/images/**"
                 ).permitAll()
+
+                /*
+                 * シフト管理とユーザー管理を含む、
+                 * それ以外の機能はログイン後に利用可能。
+                 *
+                 * GUESTも認証済みユーザーとして扱われるため、
+                 * 登録・編集・無効化を含む全機能を利用できる。
+                 */
                 .anyRequest().authenticated()
             )
 
-            // 権限不足（403）の場合の遷移先
             .exceptionHandling(exception -> exception
                 .accessDeniedPage("/error/403")
             )
 
-            // フォームログインの設定
             .formLogin(form -> form
                 .loginPage("/login")
                 .defaultSuccessUrl("/home", true)
                 .permitAll()
             )
 
-            // ログアウトの設定
             .logout(logout -> logout
                 .logoutUrl("/logout")
                 .logoutSuccessUrl("/login?logout")
                 .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID", "XSRF-TOKEN")
+                .deleteCookies(
+                        "JSESSIONID",
+                        "XSRF-TOKEN"
+                )
                 .permitAll()
             );
 
         return http.build();
     }
 
-    // パスワードエンコーダーの設定
+    /**
+     * パスワードをBCrypt形式でハッシュ化する。
+     */
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // 認証プロバイダーの設定
+    /**
+     * user_profilesテーブルに登録された
+     * 通常ユーザーを認証する。
+     */
     @Bean
-    public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider =
+    public DaoAuthenticationProvider
+            databaseAuthenticationProvider() {
+
+        DaoAuthenticationProvider provider =
                 new DaoAuthenticationProvider();
 
-        authProvider.setUserDetailsService(userDetailsService);
-        authProvider.setPasswordEncoder(passwordEncoder());
+        provider.setUserDetailsService(userDetailsService);
+        provider.setPasswordEncoder(passwordEncoder());
 
-        return authProvider;
+        return provider;
     }
 
-    // 認証マネージャーの設定
+    /**
+     * UserConfigで設定したゲストを認証する。
+     */
     @Bean
-    public AuthenticationManager authenticationManager(
-            HttpSecurity http,
-            PasswordEncoder passwordEncoder) throws Exception {
+    public DaoAuthenticationProvider guestAuthenticationProvider(
+            @Qualifier("guestUserDetailsService")
+            InMemoryUserDetailsManager guestUserDetailsService
+    ) {
 
-        return http.getSharedObject(AuthenticationManager.class);
+        DaoAuthenticationProvider provider =
+                new DaoAuthenticationProvider();
+
+        provider.setUserDetailsService(
+                guestUserDetailsService
+        );
+        provider.setPasswordEncoder(passwordEncoder());
+
+        return provider;
     }
 
-    // 並行セッションを管理するためのイベント発行
+    /**
+     * 同時ログインセッションを管理する。
+     */
     @Bean
-    public HttpSessionEventPublisher httpSessionEventPublisher() {
+    public HttpSessionEventPublisher
+            httpSessionEventPublisher() {
+
         return new HttpSessionEventPublisher();
     }
 }
